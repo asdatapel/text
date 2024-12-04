@@ -1,0 +1,5 @@
+.vscode/
+build/
+third_party/metal-cpp
+.DS_Store
+.cache/
