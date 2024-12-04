@@ -9,6 +9,7 @@
 #include "gpu/metal/texture.hpp"
 #include "math/math.hpp"
 #include "platform.hpp"
+#include "status_bar.hpp"
 #include "types.hpp"
 #include "window.hpp"
 
@@ -52,6 +53,7 @@ int main()
 
     Draw::start_frame(&dl);
     draw_window(window, device, &dl);
+    draw_status_bar(&dl);
     Draw::end_frame(&dl, device, sys_window.get_size(), capture);
 
     Gpu::end_backbuffer(device);

@@ -99,6 +99,7 @@ struct DrawSettings {
 
 struct DrawList {
   u64 frame = 0;
+  Vec2f canvas_size;
 
   Gpu::Pipeline pipeline;
   Gpu::Buffer primitive_buffer;
@@ -445,7 +446,7 @@ void init_draw_system(DrawList *dl, Gpu::Device *device)
   dl->index_buffer = create_buffer(device, MB);
 }
 
-void start_frame(DrawList *dl)
+void start_frame(DrawList *dl, Vec2f canvas_size)
 {
   dl->vert_count = 0;
   dl->draw_calls.clear();
@@ -464,11 +465,13 @@ void start_frame(DrawList *dl)
   dl->scissors.clear();
 
   push_scissor(dl, {0, 0, 100000, 100000});
+
+  dl->canvas_size = canvas_size;
 }
 
-void end_frame(DrawList *dl, Gpu::Device *device, Vec2f canvas_size, u64 frame)
+void end_frame(DrawList *dl, Gpu::Device *device, u64 frame)
 {
-  dl->primitives.canvas_size = Vec4f{canvas_size.x, canvas_size.y, 0, 0};
+  dl->primitives.canvas_size = Vec4f{dl->canvas_size.x, dl->canvas_size.y, 0, 0};
 
   if (dl->frame != frame) {
     dl->frame = frame;
