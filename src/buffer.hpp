@@ -18,6 +18,7 @@ struct BasicBuffer {
     u8* data = nullptr;
     i64 size = 0;
     i64 capacity = 0;
+    std::optional<String> filename = std::nullopt;
 };
 
 void validate_idx(BasicBuffer *buffer, i64 idx) {
@@ -35,6 +36,7 @@ void debug_validate_text_point(BasicBuffer *buffer, TextPoint point) {
 BasicBuffer load_buffer(std::optional<String> filename)
 {
     BasicBuffer buffer;
+    buffer.filename = filename;
     if (filename) {
         File file = read_file(filename.value(), &tmp_allocator);
         buffer.data = (u8*) malloc(file.data.size);
@@ -47,6 +49,13 @@ BasicBuffer load_buffer(std::optional<String> filename)
         buffer.capacity = 1024;
     }
     return buffer;
+}
+
+void write_to_disk(BasicBuffer *buffer)
+{
+    if (buffer->filename) {
+        write_file(buffer->filename.value(), {buffer->data, buffer->size});
+    }
 }
 
 i64 count_lines(BasicBuffer *buffer) {

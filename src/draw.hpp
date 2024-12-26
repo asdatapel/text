@@ -47,7 +47,7 @@ struct TextureRectPrimitive {
 
 struct BitmapGlyphPrimitive {
   Rect4f dimensions;
-  Vec4f uv_bounds[3];
+  Vec4f uv_bounds;
   u32 clip_rect_idx;
   u32 color;
   u32 texture_idx;
@@ -97,16 +97,16 @@ struct DrawSettings {
   u32 scissor_idx = 0;
 };
 
-struct DrawList {
+struct List {
+  Font font;
+  Gpu::Texture font_texture;
+
   u64 frame = 0;
   Vec2f canvas_size;
 
   Gpu::Pipeline pipeline;
   Gpu::Buffer primitive_buffer;
   Gpu::ShaderArgBuffer shader_args;
-  Gpu::Texture texture;
-
-  Font font;
 
   Primitives primitives;
   i32 clip_rects_count    = 0;
@@ -117,11 +117,11 @@ struct DrawList {
   i32 vector_glyphs_count = 0;
   i32 lines_count         = 0;
 
-  Gpu::Texture textures[128];
-  i32 texture_count = 0;
-
   StaticStack<Rect4f, 1024> scissors;
   StaticStack<u32, 1024> scissor_idxs;
+
+  i32 texture_count = 0;
+  Gpu::Texture textures[128];
 
   StaticStack<DrawSettings, 32> settings;
 
@@ -133,26 +133,26 @@ struct DrawList {
   i32 max_z = 0;
 };
 
-void push_draw_settings(DrawList *dl, DrawSettings ds) {
+void push_draw_settings(List *dl, DrawSettings ds) {
   dl->settings.push_back(ds);
 }
-void pop_draw_settings(DrawList *dl) {
+void pop_draw_settings(List *dl) {
   dl->settings.pop();
 }
 
-u32 get_current_scissor_idx(DrawList *dl) {
+u32 get_current_scissor_idx(List *dl) {
   if (dl->settings.size > 0 && dl->settings.top().force_scissor) {
     return dl->settings.top().scissor_idx;
   }
   return dl->scissor_idxs.top();
 }
-Rect4f get_current_scissor(DrawList *dl) {
+Rect4f get_current_scissor(List *dl) {
   if (dl->settings.size > 0 && dl->settings.top().force_scissor) {
     return dl->primitives.clip_rects[dl->settings.top().scissor_idx].rect;
   }
   return dl->scissors.top();
 }
-u32 push_scissor(DrawList *dl, Rect4f rect)
+u32 push_scissor(List *dl, Rect4f rect)
 {
   auto to_bounds = [](Rect4f r) {
     return Vec4f{r.x, r.y, r.x + r.width, r.y + r.height};
@@ -176,24 +176,24 @@ u32 push_scissor(DrawList *dl, Rect4f rect)
 
   return dl->clip_rects_count - 1;
 }
-void pop_scissor(DrawList *dl)
+void pop_scissor(List *dl)
 {
   dl->scissor_idxs.pop();
   dl->scissors.pop();
 }
-void push_base_scissor(DrawList *dl)
+void push_base_scissor(List *dl)
 {
   dl->scissor_idxs.push_back(0);
   dl->scissors.push_back(dl->scissors[0]);
 }
 
-u32 push_texture(DrawList *dl, Gpu::Texture texture)
+u32 push_texture(List *dl, Gpu::Texture texture)
 {
   dl->textures[dl->texture_count++] = texture;
   return dl->texture_count - 1;
 }
 
-void push_draw_call(DrawList *dl, i32 tri_count, i32 z)
+void push_draw_call(List *dl, i32 tri_count, i32 z)
 {
   if (dl->draw_calls.size > 0) {
     DrawCall *last_draw_call = &dl->draw_calls[dl->draw_calls.size - 1];
@@ -217,7 +217,7 @@ enum CornerMask : u32 {
   BOTTOM       = BOTTOM_LEFT | BOTTOM_RIGHT,
   ALL          = TOP | BOTTOM,
 };
-u32 push_primitive_rounded_rect(DrawList *dl, Rect4f rect, Color color,
+u32 push_primitive_rounded_rect(List *dl, Rect4f rect, Color color,
                                 f32 corner_radius, u32 corner_mask)
 {
   dl->primitives.rounded_rects[dl->rounded_rects_count++] = {
@@ -227,11 +227,11 @@ u32 push_primitive_rounded_rect(DrawList *dl, Rect4f rect, Color color,
   return dl->rounded_rects_count - 1;
 }
 
-RoundedRectPrimitive *push_rounded_rect(DrawList *dl, i32 z, Rect4f rect,
+RoundedRectPrimitive *push_rounded_rect(List *dl, i32 z, Rect4f rect,
                                         f32 corner_radius, Color color,
                                         u32 corner_mask = CornerMask::ALL)
 {
-  auto push_rect_vert = [](DrawList *dl, u32 primitive_index, u8 corner) {
+  auto push_rect_vert = [](List *dl, u32 primitive_index, u8 corner) {
     dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::ROUNDED_RECT |
                                    CORNERS[corner] | primitive_index};
   };
@@ -255,24 +255,24 @@ RoundedRectPrimitive *push_rounded_rect(DrawList *dl, i32 z, Rect4f rect,
   return &dl->primitives.rounded_rects[primitive_idx];
 }
 
-RoundedRectPrimitive *push_rect(DrawList *dl, i32 z, Rect4f rect, Color color)
+RoundedRectPrimitive *push_rect(List *dl, i32 z, Rect4f rect, Color color)
 {
   return push_rounded_rect(dl, z, rect, 0, color);
 }
 
-u32 push_primitive_bitmap_glyph(DrawList *dl, Rect4f rect, Vec4f uv_bounds[3],
+u32 push_primitive_bitmap_glyph(List *dl, Rect4f rect, Vec4f uv_bounds,
                                 Color color, u32 texture_idx)
 {
   dl->primitives.bitmap_glyphs[dl->bitmap_glyphs_count++] = {
-      rect, {uv_bounds[0], uv_bounds[1], uv_bounds[2]}, get_current_scissor_idx(dl), color_to_int(color), texture_idx};
+      rect, uv_bounds, get_current_scissor_idx(dl), color_to_int(color), texture_idx};
 
   return dl->bitmap_glyphs_count - 1;
 }
 
-void push_bitmap_glyph(DrawList *dl, i32 z, Rect4f rect, Vec4f uv_bounds[3],
+void push_bitmap_glyph(List *dl, i32 z, Rect4f rect, Vec4f uv_bounds,
                        Color color, u32 texture_idx)
 {
-  auto push_glyph_vert = [](DrawList *dl, u32 primitive_index, u8 corner) {
+  auto push_glyph_vert = [](List *dl, u32 primitive_index, u8 corner) {
     dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::BITMAP_GLYPH |
                                    CORNERS[corner] | primitive_index};
   };
@@ -293,7 +293,7 @@ void push_bitmap_glyph(DrawList *dl, i32 z, Rect4f rect, Vec4f uv_bounds[3],
   push_draw_call(dl, 2, z);
 }
 
-// void push_text(DrawList *dl, Font font, i32 z, String text, Vec2f pos, Color color,
+// void push_text(List *dl, Font font, i32 z, String text, Vec2f pos, Color color,
 //                f32 height)
 // {
 //   f32 baseline     = font.baseline;
@@ -316,7 +316,7 @@ void push_bitmap_glyph(DrawList *dl, i32 z, Rect4f rect, Vec4f uv_bounds[3],
 //   }
 // };
 
-// void push_text_centered(DrawList *dl, i32 z, String text, Vec2f pos,
+// void push_text_centered(List *dl, i32 z, String text, Vec2f pos,
 //                         Vec2b center, Color color, f32 height)
 // {
 //   f32 resize_ratio = height / dl->font.font_size_px;
@@ -330,17 +330,17 @@ void push_bitmap_glyph(DrawList *dl, i32 z, Rect4f rect, Vec4f uv_bounds[3],
 //   push_text(dl, dl->font, z, text, centered_pos, color, height);
 // }
 
-void push_texture_rect(DrawList *dl, i32 z, Rect4f rect, Vec4f uv_bounds,
+void push_texture_rect(List *dl, i32 z, Rect4f rect, Vec4f uv_bounds,
                        Gpu::Texture texture)
 {
-  auto push_primitive_texture_rect = [](DrawList *dl, Rect4f rect,
+  auto push_primitive_texture_rect = [](List *dl, Rect4f rect,
                                         Vec4f uv_bounds, i32 texture_idx) {
     dl->primitives.texture_rects[dl->texture_rects_count++] = {
         rect, uv_bounds, texture_idx, get_current_scissor_idx(dl)};
 
     return dl->texture_rects_count - 1;
   };
-  auto push_texture_rect_vert = [](DrawList *dl, u32 primitive_index,
+  auto push_texture_rect_vert = [](List *dl, u32 primitive_index,
                                    u8 corner) {
     dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::TEXTURE_RECT |
                                    CORNERS[corner] | primitive_index};
@@ -364,7 +364,7 @@ void push_texture_rect(DrawList *dl, i32 z, Rect4f rect, Vec4f uv_bounds,
   push_draw_call(dl, 2, z);
 }
 
-u32 push_primitive_line(DrawList *dl, Vec2f a, Vec2f b, Color color)
+u32 push_primitive_line(List *dl, Vec2f a, Vec2f b, Color color)
 {
   dl->primitives.lines[dl->lines_count++] = {a, b, color_to_int(color),
                                              get_current_scissor_idx(dl)};
@@ -372,9 +372,9 @@ u32 push_primitive_line(DrawList *dl, Vec2f a, Vec2f b, Color color)
   return dl->lines_count - 1;
 }
 
-void push_line(DrawList *dl, i32 z, Vec2f a, Vec2f b, Color color)
+void push_line(List *dl, i32 z, Vec2f a, Vec2f b, Color color)
 {
-  auto push_vert = [](DrawList *dl, u32 primitive_index, u8 corner) {
+  auto push_vert = [](List *dl, u32 primitive_index, u8 corner) {
     dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::LINE | CORNERS[corner] |
                                    primitive_index};
   };
@@ -398,7 +398,7 @@ void push_line(DrawList *dl, i32 z, Vec2f a, Vec2f b, Color color)
   push_draw_call(dl, 2, z);
 }
 
-void push_cubic_spline(DrawList *dl, i32 z, Vec2f p[4], Color color,
+void push_cubic_spline(List *dl, i32 z, Vec2f p[4], Color color,
                        i32 n_segments)
 {
   auto evaluate_spline = [&](f32 t) {
@@ -422,7 +422,7 @@ void push_cubic_spline(DrawList *dl, i32 z, Vec2f p[4], Color color,
   }
 }
 
-void init_draw_system(DrawList *dl, Gpu::Device *device)
+void init_draw_system(List *dl, Gpu::Device *gpu)
 {
   Gpu::ShaderArgumentDefinition shader_arg_def_primitives;
   shader_arg_def_primitives.type = Gpu::ShaderArgumentDefinition::Type::DATA;
@@ -436,17 +436,20 @@ void init_draw_system(DrawList *dl, Gpu::Device *device)
   pipeline_def.frag_shader = "fragment_shader";
   pipeline_def.arg_defs = {shader_arg_def_primitives, shader_arg_def_textures};
   pipeline_def.format = PixelFormat::UNKNOWN;
-  dl->pipeline = Gpu::create_pipeline(device, pipeline_def);
+  dl->pipeline = Gpu::create_pipeline(gpu, pipeline_def);
 
-  dl->shader_args = Gpu::create_shader_arg_buffer(device, &dl->pipeline);
-  dl->primitive_buffer = Gpu::create_buffer(device, 128*MB);
+  dl->shader_args = Gpu::create_shader_arg_buffer(gpu, &dl->pipeline);
+  dl->primitive_buffer = Gpu::create_buffer(gpu, 128*MB);
   Gpu::bind_shader_buffer_data(dl->shader_args, dl->primitive_buffer, 0, 0);
 
   dl->verts        = (u32 *)malloc(sizeof(u32) * 1024 * 1024);
-  dl->index_buffer = create_buffer(device, MB);
+  dl->index_buffer = create_buffer(gpu, MB);
+
+  dl->font = load_font("resources/fonts/jetbrains/JetBrainsMono-Medium.ttf", 24);
+  dl->font_texture = Gpu::create_texture(gpu, dl->font.bitmap);
 }
 
-void start_frame(DrawList *dl, Vec2f canvas_size)
+void start_frame(List *dl, Vec2f canvas_size)
 {
   dl->vert_count = 0;
   dl->draw_calls.clear();
@@ -467,9 +470,11 @@ void start_frame(DrawList *dl, Vec2f canvas_size)
   push_scissor(dl, {0, 0, 100000, 100000});
 
   dl->canvas_size = canvas_size;
+
+  Draw::push_texture(dl, dl->font_texture);
 }
 
-void end_frame(DrawList *dl, Gpu::Device *device, u64 frame)
+void end_frame(List *dl, Gpu::Device *gpu, u64 frame)
 {
   dl->primitives.canvas_size = Vec4f{dl->canvas_size.x, dl->canvas_size.y, 0, 0};
 
@@ -485,21 +490,21 @@ void end_frame(DrawList *dl, Gpu::Device *device, u64 frame)
 
   // bind_shader_args()
   {
-    device->render_command_encoder->setVertexBuffer(dl->shader_args.buffer.mtl_buffer, 0, 0);
-    device->render_command_encoder->setFragmentBuffer(dl->shader_args.buffer.mtl_buffer, 0, 0);
-    device->render_command_encoder->useResource(dl->primitive_buffer.mtl_buffer, MTL::ResourceUsageRead, MTL::RenderStageFragment | MTL::RenderStageVertex);
+    gpu->render_command_encoder->setVertexBuffer(dl->shader_args.buffer.mtl_buffer, 0, 0);
+    gpu->render_command_encoder->setFragmentBuffer(dl->shader_args.buffer.mtl_buffer, 0, 0);
+    gpu->render_command_encoder->useResource(dl->primitive_buffer.mtl_buffer, MTL::ResourceUsageRead, MTL::RenderStageFragment | MTL::RenderStageVertex);
 
     if(dl->texture_count > 0) {
-      device->render_command_encoder->useResource(dl->textures[0].mtl_texture, MTL::ResourceUsageRead, MTL::RenderStageFragment);
+      gpu->render_command_encoder->useResource(dl->textures[0].mtl_texture, MTL::ResourceUsageRead, MTL::RenderStageFragment);
     }
   }
 
-  Gpu::bind_pipeline(device, dl->pipeline);
+  Gpu::bind_pipeline(gpu, dl->pipeline);
   for (i32 z = dl->max_z; z >= 0; z--) {
     for (i32 i = 0; i < dl->draw_calls.size; i++) {
       DrawCall call = dl->draw_calls[i];
       if (call.z == z) {
-        Gpu::draw_indexed(device, dl->index_buffer, call.vert_offset,
+        Gpu::draw_indexed(gpu, dl->index_buffer, call.vert_offset,
                           call.tri_count * 3);
       }
     }

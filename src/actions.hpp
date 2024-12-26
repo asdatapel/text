@@ -1,6 +1,7 @@
 #pragma once
 
 #include "containers/array.hpp"
+#include "containers/dynamic_array.hpp"
 #include "input.hpp"
 #include "logging.hpp"
 
@@ -8,7 +9,19 @@ enum struct Mode {
   NORMAL,
   INSERT,
 };
+struct Focusable {
+  Mode mode = Mode::INSERT;
+};
+
 enum struct Command {
+  INPUT_TEXT,
+  INPUT_NEWLINE,
+  INPUT_TAB,
+  INPUT_BACKSPACE,
+  INPUT_DELETE,
+
+  BUFFER_CHANGE_MODE,
+  BUFFER_SAVE,
   BUFFER_COPY,
   BUFFER_PASTE,
   BUFFER_PLACE_ANCHOR,
@@ -25,61 +38,107 @@ enum struct Command {
 
   WINDOW_SCROLL_UP,
   WINDOW_SCROLL_DOWN,
-};
-typedef Array<Command, 128> Commands;
 
-struct Commander {
-    Mode mode = Mode::NORMAL;
-    Array<Key, 16> chord;
+  MENU_QUICK_OPEN,
+};
+struct Action {
+  Command command;
+  u32 character;
+
+  Action() {}
+  Action(Command command) { this->command = command; }
+  Action(u32 character)
+  {
+    this->command   = Command::INPUT_TEXT;
+    this->character = character;
+  }
+
+  bool operator==(Command command) { return this->command == command; }
+};
+typedef Array<Action, 128> Actions;
+
+typedef Array<KeyInput, 8> Chord;
+Array<std::pair<Chord, Command>, 1024> bindings = {
+    {Chord{{Key::H}}, Command::NAV_CHAR_LEFT},
+    {Chord{{Key::LEFT}}, Command::NAV_CHAR_LEFT},
+    {Chord{{Key::L}}, Command::NAV_CHAR_RIGHT},
+    {Chord{{Key::RIGHT}}, Command::NAV_CHAR_RIGHT},
+    {Chord{{Key::J}}, Command::NAV_LINE_DOWN},
+    {Chord{{Key::DOWN}}, Command::NAV_LINE_DOWN},
+    {Chord{{Key::K}}, Command::NAV_LINE_UP},
+    {Chord{{Key::UP}}, Command::NAV_LINE_UP},
+    {Chord{{Key::B}}, Command::NAV_WORD_LEFT},
+    {Chord{{Key::E}}, Command::NAV_WORD_RIGHT},
+
+    {Chord{{Key::ENTER}}, Command::INPUT_NEWLINE},
+    {Chord{{Key::TAB}}, Command::INPUT_TAB},
+    {Chord{{Key::BACKSPACE}}, Command::INPUT_BACKSPACE},
+    {Chord{{Key::DEL}}, Command::INPUT_DELETE},
+
+    {Chord{{Key::SPACE}, {Key::SPACE}}, Command::MENU_QUICK_OPEN},
+
+    {Chord{{Key::S, Modifiers{.super = true}}}, Command::BUFFER_SAVE},
+    {Chord{{Key::A}}, Command::BUFFER_PLACE_ANCHOR},
+    {Chord{{Key::Y}}, Command::BUFFER_COPY},
+    {Chord{{Key::P}}, Command::BUFFER_PASTE},
+
+    {Chord{{Key::LALT}}, Command::BUFFER_CHANGE_MODE},
+    {Chord{{Key::RALT}}, Command::BUFFER_CHANGE_MODE},
 };
 
-void process_input(Commander *commander, Input *input, Commands *commands)
+bool match_chord(Chord *chord, Chord *binding, bool *any_partial_matches)
 {
-  commands->clear();
+  bool matching = true;
 
-  for (i32 i = 0; i < input->key_input.size; i++) {
-    Key key   = input->key_input[i];
-    bool ctrl = input->keys[(i32)Key::LCTRL] || input->keys[(i32)Key::RCTRL];
+  for (i32 i = 0; i < chord->size && i < binding->size; i++) {
+    if ((*chord)[i] != (*binding)[i]) {
+      return false;
+    }
+  }
 
-    if (key == Key::LALT || key == Key::RALT) {
-        switch(commander->mode) {
-            case Mode::NORMAL:
-                commander->mode = Mode::INSERT;
-                break;
-            case Mode::INSERT:
-                commander->mode = Mode::NORMAL;
-                break;
-        }
+  if (chord->size < binding->size) {
+    *any_partial_matches |= matching;
+  }
+
+  return chord->size == binding->size && matching;
+}
+
+void process_input(Input *input, Actions *actions, Chord *chord, Mode mode)
+{
+  actions->clear();
+
+  if (mode == Mode::INSERT && chord->size == 0) {
+    for (i32 i = 0; i < input->text_inputs.size; i++) {
+      actions->push_back(input->text_inputs[i]);
+    }
+  }
+
+  for (i32 i = 0; i < input->key_inputs.size; i++) {
+    KeyInput key = input->key_inputs[i];
+
+    error("ASDASD, ", chord->size, ", ", key.text_key);
+    if (key.text_key && mode == Mode::INSERT && chord->size == 0) {
+      break;
+    }
+    error("QWEE, ", chord->size, ", ", key.text_key);
+
+    chord->push_back(key);
+  }
+
+  bool any_partial_matches = false;
+  if (chord->size > 0) {
+    error("POIU, ", chord->size);
+    for (i32 i = 0; i < bindings.size; i++) {
+      if (match_chord(chord, &bindings[i].first, &any_partial_matches)) {
+        chord->clear();
+        actions->push_back(bindings[i].second);
+        error("BINDING ", i);
+      }
     }
 
-    if (commander->mode == Mode::NORMAL) {
-        if (key == Key::A) {
-            commands->push_back(Command::BUFFER_PLACE_ANCHOR);
-        }
-        if (key == Key::Y) {
-            commands->push_back(Command::BUFFER_COPY);
-        }
-        if (key == Key::P) {
-            commands->push_back(Command::BUFFER_PASTE);
-        }
-        if (key == Key::LEFT || key == Key::H) {
-            commands->push_back(Command::NAV_CHAR_LEFT);
-        }
-        if (key == Key::RIGHT || key == Key::L) {
-            commands->push_back(Command::NAV_CHAR_RIGHT);
-        }
-        if (key == Key::DOWN || key == Key::J) {
-            commands->push_back(Command::NAV_LINE_DOWN);
-        }
-        if (key == Key::UP || key == Key::K) {
-            commands->push_back(Command::NAV_LINE_UP);
-        }
-        if (key == Key::B) {
-            commands->push_back(Command::NAV_WORD_LEFT);
-        }
-        if (key == Key::E) {
-            commands->push_back(Command::NAV_WORD_RIGHT);
-        }
+    if (!any_partial_matches) {
+      error("ZXC, ", chord->size);
+      chord->clear();
     }
   }
 }

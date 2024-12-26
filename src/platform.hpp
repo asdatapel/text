@@ -1,12 +1,14 @@
 #pragma once
 
 #include <cstring>
-#include "memory.hpp"
-#include "string.hpp"
+
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include "containers/dynamic_array.hpp"
 #include "input.hpp"
+#include "memory.hpp"
+#include "string.hpp"
 #include "types.hpp"
 
 namespace Platform
@@ -26,7 +28,6 @@ enum struct CursorShape {
 void init()
 {
   glfwInit();
-
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 }
 
@@ -110,8 +111,8 @@ void fill_input(GlfwWindow *window, Input *state)
     state->mouse_button_down_events[i] = false;
     state->mouse_button_up_events[i]   = false;
   }
-  state->text_input        = {};
-  state->key_input         = {};
+  state->text_inputs       = {};
+  state->key_inputs        = {};
   state->scrollwheel_count = 0;
 
   f64 mouse_x;
@@ -130,7 +131,7 @@ void character_input_callback(GLFWwindow *window, u32 codepoint)
 
   if (codepoint < 256)  // only doing ASCII
   {
-    input->text_input.push_back(codepoint);
+    input->text_inputs.push_back(codepoint);
   }
 }
 
@@ -138,21 +139,33 @@ void key_input_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i
 {
   Input *input = static_cast<Input *>(glfwGetWindowUserPointer(window));
 
-  auto append_if_press = [&](Key k) {
+  Modifiers modifiers = {
+      .shift = static_cast<bool>(mods & (GLFW_MOD_SHIFT | GLFW_MOD_CAPS_LOCK)),
+      .ctrl  = static_cast<bool>(mods & GLFW_MOD_CONTROL),
+      .alt   = static_cast<bool>(mods & GLFW_MOD_ALT),
+      .super = static_cast<bool>(mods & GLFW_MOD_SUPER),
+  };
+
+  auto append_if_press = [&](Key k, bool text_key = false) {
     input->keys[(i32)k] = (action == GLFW_PRESS || action == GLFW_REPEAT);
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-      input->key_input.push_back(k);
+      input->key_inputs.push_back({k, modifiers, text_key});
       input->key_down_events[(i32)k] = true;
     } else {
       input->key_up_events[(i32)k] = true;
     }
   };
 
-  auto append_if_press_with_shift = [&](Key unshifted, Key shifted) {
+  auto append_if_press_without_modifiers = [&](Key k) {
+    modifiers = {};
+    append_if_press(k);
+  };
+
+  auto append_if_press_text_key = [&](Key unshifted, Key shifted) {
     if (mods & (GLFW_MOD_SHIFT | GLFW_MOD_CAPS_LOCK)) {
-      append_if_press(shifted);
+      append_if_press(shifted, true);
     } else {
-      append_if_press(unshifted);
+      append_if_press(unshifted, true);
     }
   };
 
@@ -176,150 +189,150 @@ void key_input_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i
 
     case GLFW_KEY_0:
     case GLFW_KEY_KP_0:
-      append_if_press_with_shift(Key::NUM_0, Key::RIGHT_PARENTHESIS);
+      append_if_press_text_key(Key::NUM_0, Key::RIGHT_PARENTHESIS);
       break;
     case GLFW_KEY_1:
     case GLFW_KEY_KP_1:
-      append_if_press_with_shift(Key::NUM_1, Key::EXCLAMATION_MARK);
+      append_if_press_text_key(Key::NUM_1, Key::EXCLAMATION_MARK);
       break;
     case GLFW_KEY_2:
     case GLFW_KEY_KP_2:
-      append_if_press_with_shift(Key::NUM_2, Key::AT);
+      append_if_press_text_key(Key::NUM_2, Key::AT);
       break;
     case GLFW_KEY_3:
     case GLFW_KEY_KP_3:
-      append_if_press_with_shift(Key::NUM_3, Key::HASH);
+      append_if_press_text_key(Key::NUM_3, Key::HASH);
       break;
     case GLFW_KEY_4:
     case GLFW_KEY_KP_4:
-      append_if_press_with_shift(Key::NUM_4, Key::DOLLAR_SIGN);
+      append_if_press_text_key(Key::NUM_4, Key::DOLLAR_SIGN);
       break;
     case GLFW_KEY_5:
     case GLFW_KEY_KP_5:
-      append_if_press_with_shift(Key::NUM_5, Key::PERCENT);
+      append_if_press_text_key(Key::NUM_5, Key::PERCENT);
       break;
     case GLFW_KEY_6:
     case GLFW_KEY_KP_6:
-      append_if_press_with_shift(Key::NUM_6, Key::CARET);
+      append_if_press_text_key(Key::NUM_6, Key::CARET);
       break;
     case GLFW_KEY_7:
     case GLFW_KEY_KP_7:
-      append_if_press_with_shift(Key::NUM_7, Key::AMPERSAND);
+      append_if_press_text_key(Key::NUM_7, Key::AMPERSAND);
       break;
     case GLFW_KEY_8:
     case GLFW_KEY_KP_8:
-      append_if_press_with_shift(Key::NUM_8, Key::STAR);
+      append_if_press_text_key(Key::NUM_8, Key::STAR);
       break;
     case GLFW_KEY_9:
     case GLFW_KEY_KP_9:
-      append_if_press_with_shift(Key::NUM_9, Key::LEFT_PARENTHSIS);
+      append_if_press_text_key(Key::NUM_9, Key::LEFT_PARENTHSIS);
       break;
 
     case GLFW_KEY_A:
-      append_if_press(Key::A);
+      append_if_press_text_key(Key::A, Key::A);
       break;
     case GLFW_KEY_B:
-      append_if_press(Key::B);
+      append_if_press_text_key(Key::B, Key::B);
       break;
     case GLFW_KEY_C:
-      append_if_press(Key::C);
+      append_if_press_text_key(Key::C, Key::C);
       break;
     case GLFW_KEY_D:
-      append_if_press(Key::D);
+      append_if_press_text_key(Key::D, Key::D);
       break;
     case GLFW_KEY_E:
-      append_if_press(Key::E);
+      append_if_press_text_key(Key::E, Key::E);
       break;
     case GLFW_KEY_F:
-      append_if_press(Key::F);
+      append_if_press_text_key(Key::F, Key::F);
       break;
     case GLFW_KEY_G:
-      append_if_press(Key::G);
+      append_if_press_text_key(Key::G, Key::G);
       break;
     case GLFW_KEY_H:
-      append_if_press(Key::H);
+      append_if_press_text_key(Key::H, Key::H);
       break;
     case GLFW_KEY_I:
-      append_if_press(Key::I);
+      append_if_press_text_key(Key::I, Key::I);
       break;
     case GLFW_KEY_J:
-      append_if_press(Key::J);
+      append_if_press_text_key(Key::J, Key::J);
       break;
     case GLFW_KEY_K:
-      append_if_press(Key::K);
+      append_if_press_text_key(Key::K, Key::K);
       break;
     case GLFW_KEY_L:
-      append_if_press(Key::L);
+      append_if_press_text_key(Key::L, Key::L);
       break;
     case GLFW_KEY_M:
-      append_if_press(Key::M);
+      append_if_press_text_key(Key::M, Key::M);
       break;
     case GLFW_KEY_N:
-      append_if_press(Key::N);
+      append_if_press_text_key(Key::N, Key::N);
       break;
     case GLFW_KEY_O:
-      append_if_press(Key::O);
+      append_if_press_text_key(Key::O, Key::O);
       break;
     case GLFW_KEY_P:
-      append_if_press(Key::P);
+      append_if_press_text_key(Key::P, Key::P);
       break;
     case GLFW_KEY_Q:
-      append_if_press(Key::Q);
+      append_if_press_text_key(Key::Q, Key::Q);
       break;
     case GLFW_KEY_R:
-      append_if_press(Key::R);
+      append_if_press_text_key(Key::R, Key::R);
       break;
     case GLFW_KEY_S:
-      append_if_press(Key::S);
+      append_if_press_text_key(Key::S, Key::S);
       break;
     case GLFW_KEY_T:
-      append_if_press(Key::T);
+      append_if_press_text_key(Key::T, Key::T);
       break;
     case GLFW_KEY_U:
-      append_if_press(Key::U);
+      append_if_press_text_key(Key::U, Key::U);
       break;
     case GLFW_KEY_V:
-      append_if_press(Key::V);
+      append_if_press_text_key(Key::V, Key::V);
       break;
     case GLFW_KEY_W:
-      append_if_press(Key::W);
+      append_if_press_text_key(Key::W, Key::W);
       break;
     case GLFW_KEY_X:
-      append_if_press(Key::X);
+      append_if_press_text_key(Key::X, Key::X);
       break;
     case GLFW_KEY_Y:
-      append_if_press(Key::Y);
+      append_if_press_text_key(Key::Y, Key::Y);
       break;
     case GLFW_KEY_Z:
-      append_if_press(Key::Z);
+      append_if_press_text_key(Key::Z, Key::Z);
       break;
 
     case GLFW_KEY_GRAVE_ACCENT:
-      append_if_press_with_shift(Key::BACKTICK, Key::TILDE);
+      append_if_press_text_key(Key::BACKTICK, Key::TILDE);
       break;
     case GLFW_KEY_MINUS:
-      append_if_press_with_shift(Key::DASH, Key::UNDERSCORE);
+      append_if_press_text_key(Key::DASH, Key::UNDERSCORE);
       break;
     case GLFW_KEY_EQUAL:
-      append_if_press_with_shift(Key::EQUAL, Key::PLUS);
+      append_if_press_text_key(Key::EQUAL, Key::PLUS);
       break;
     case GLFW_KEY_LEFT_BRACKET:
-      append_if_press_with_shift(Key::LEFT_BRACKET, Key::LEFT_CURLY_BRACE);
+      append_if_press_text_key(Key::LEFT_BRACKET, Key::LEFT_CURLY_BRACE);
       break;
     case GLFW_KEY_RIGHT_BRACKET:
-      append_if_press_with_shift(Key::RIGHT_BRACKET, Key::RIGHT_CURLY_BRACE);
+      append_if_press_text_key(Key::RIGHT_BRACKET, Key::RIGHT_CURLY_BRACE);
       break;
     case GLFW_KEY_SLASH:
-      append_if_press_with_shift(Key::SLASH, Key::QUESTION_MARK);
+      append_if_press_text_key(Key::SLASH, Key::QUESTION_MARK);
       break;
     case GLFW_KEY_COMMA:
-      append_if_press_with_shift(Key::COMMA, Key::LESS_THAN);
+      append_if_press_text_key(Key::COMMA, Key::LESS_THAN);
       break;
     case GLFW_KEY_PERIOD:
-      append_if_press_with_shift(Key::PERIOD, Key::GREATER_THAN);
+      append_if_press_text_key(Key::PERIOD, Key::GREATER_THAN);
       break;
     case GLFW_KEY_BACKSLASH:
-      append_if_press_with_shift(Key::BACKSLASH, Key::PIPE);
+      append_if_press_text_key(Key::BACKSLASH, Key::PIPE);
       break;
 
     case GLFW_KEY_UP:
@@ -373,26 +386,31 @@ void key_input_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i
       break;
 
     case GLFW_KEY_CAPS_LOCK:
-      append_if_press(Key::CAPS_LOCK);
+      append_if_press_without_modifiers(Key::CAPS_LOCK);
       break;
     case GLFW_KEY_LEFT_SHIFT:
-      append_if_press(Key::LSHIFT);
+      append_if_press_without_modifiers(Key::LSHIFT);
       break;
     case GLFW_KEY_RIGHT_SHIFT:
-      append_if_press(Key::RSHIFT);
+      append_if_press_without_modifiers(Key::RSHIFT);
       break;
     case GLFW_KEY_LEFT_CONTROL:
-      append_if_press(Key::LCTRL);
+      append_if_press_without_modifiers(Key::LCTRL);
       break;
     case GLFW_KEY_RIGHT_CONTROL:
-      append_if_press(Key::RCTRL);
+      append_if_press_without_modifiers(Key::RCTRL);
+      break;
+    case GLFW_KEY_LEFT_SUPER:
+    case GLFW_KEY_RIGHT_SUPER:
+      append_if_press_without_modifiers(Key::COMMAND);
       break;
     case GLFW_KEY_LEFT_ALT:
-      append_if_press(Key::LALT);
+      append_if_press_without_modifiers(Key::LALT);
       break;
     case GLFW_KEY_RIGHT_ALT:
-      append_if_press(Key::RALT);
+      append_if_press_without_modifiers(Key::RALT);
       break;
+
     case GLFW_KEY_ESCAPE:
       append_if_press(Key::ESCAPE);
       break;
@@ -467,4 +485,21 @@ void set_clipboard(GlfwWindow *window, String str)
   glfwSetClipboardString(window->ref, str.c_str(&tmp_allocator));
 }
 
+DynamicArray<String> list_files(String root, StackAllocator *alloc)
+{
+  DynamicArray<String> files(alloc);
+  files.set_capacity(128);
+
+  std::filesystem::path root_path = std::string((char *)root.data, root.size);
+  for (const auto &entry : std::filesystem::recursive_directory_iterator(root_path)) {
+    String filename;
+    filename.size = entry.path().string().size();
+    filename.data = alloc->alloc(filename.size).data;
+    memcpy(filename.data, entry.path().string().data(), filename.size);
+
+    files.push_back(filename);
+  }
+
+  return files;
+}
 }  // namespace Platform

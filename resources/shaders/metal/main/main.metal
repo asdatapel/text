@@ -30,7 +30,7 @@ struct TextureRectPrimitive {
 
 struct BitmapGlyphPrimitive {
   packed_float4 dimensions;
-  packed_float4 uv_bounds[3];
+  packed_float4 uv_bounds;
   u32 clip_rect_idx;
   u32 color;
   u32 texture_idx;
@@ -167,28 +167,16 @@ vertex_shader(u32 vertex_id [[vertex_id]],
             {p.dimensions.x + p.dimensions.z,  p.dimensions.y + p.dimensions.w},
         };
 
-        out.color = uint_to_vec_color(p.color);
-        i32 which_bounds = 0;
-        f32 unused;
-        f32 offset = metal::modf(verts[corner].x, unused);
-        if (offset > .666f) {
-            which_bounds = 1;
-            out.color = float4(1, 0, 0, 1);
-        } else if (offset > .333f) {
-            which_bounds = 2;
-            out.color = float4(0, 1, 0, 1);
-        }
-
         float2 uvs[4] = {
-            {p.uv_bounds[which_bounds].x, p.uv_bounds[which_bounds].y},
-            {p.uv_bounds[which_bounds].z, p.uv_bounds[which_bounds].y},
-            {p.uv_bounds[which_bounds].x, p.uv_bounds[which_bounds].w},
-            {p.uv_bounds[which_bounds].z, p.uv_bounds[which_bounds].w},
+            {p.uv_bounds.x, p.uv_bounds.y},
+            {p.uv_bounds.z, p.uv_bounds.y},
+            {p.uv_bounds.x, p.uv_bounds.w},
+            {p.uv_bounds.z, p.uv_bounds.w},
         };
 
         out.ndc_position = float4(verts[corner] / primitives->canvas_size.xy * float2(2, 2) - float2(1, 1), 0, 1);
         out.uv = uvs[corner];
-        // out.color = uint_to_vec_color(p.color);
+        out.color = uint_to_vec_color(p.color);
         out.position = verts[corner];
         out.texture_idx = p.texture_idx;
         out.clip_rect_bounds = float4(clip.rect.x, clip.rect.y, clip.rect.x + clip.rect.z, clip.rect.y + clip.rect.w);

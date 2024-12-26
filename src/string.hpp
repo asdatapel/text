@@ -8,30 +8,30 @@
 
 struct String {
   u8 *data = nullptr;
-  u32 size = 0;
+  i64 size = 0;
 
   String() {}
 
-  String(u8 *data, u32 size)
+  String(u8 *data, i64 size)
   {
     this->data = data;
     this->size = size;
   }
 
-  template <u32 N>
+  template <i64 N>
   String(const char (&str)[N])
   {
     data = (u8 *)&str;
     size = N - 1;  // remove '\0'
   }
 
-  u8 &operator[](u32 i)
+  u8 &operator[](i64 i)
   {
     assert(i < size);
     return data[i];
   }
 
-  String sub(u32 from, u32 to)
+  String sub(i64 from, i64 to)
   {
     assert(from <= size);
     assert(to <= size);
@@ -98,7 +98,7 @@ struct StaticString {
     data[size] = '\0';
   }
 
-  template <u32 N>
+  template <i64 N>
   StaticString(const char (&str)[N])
   {
     assert(N <= CAPACITY + 1);
@@ -132,13 +132,13 @@ struct StaticString {
   String to_str() { return String(data, size); }
   operator String() { return to_str(); }
 
-  u8 &operator[](u32 i)
+  u8 &operator[](i64 i)
   {
     assert(i < size);
     return data[i];
   }
 
-  void shift_delete_range(u32 from, u32 to)
+  void shift_delete_range(i64 from, i64 to)
   {
     assert(from >= 0);
     assert(from < size);
@@ -154,7 +154,7 @@ struct StaticString {
     }
   }
 
-  void shift_delete(u32 i)
+  void shift_delete(i64 i)
   {
     assert(i >= 0);
     assert(i < size);
@@ -162,12 +162,12 @@ struct StaticString {
     shift_delete_range(i, i + 1);
   }
 
-  void push_middle(u8 value, u32 i)
+  void push_middle(u8 value, i64 i)
   {
     assert(i >= 0);
     assert(i <= size);
 
-    u32 j = size;
+    i64 j = size;
     while (j > i) {
       data[j] = data[j - 1];
       j--;

@@ -3,7 +3,7 @@
 #include "containers/array.hpp"
 #include "math/math.hpp"
 
-enum struct Key {
+enum struct Key : u8 {
   SPACE,
   TAB,
   ENTER,
@@ -101,6 +101,7 @@ enum struct Key {
   RSHIFT,
   LCTRL,
   RCTRL,
+  COMMAND,
   LALT,
   RALT,
   ESCAPE,
@@ -115,6 +116,36 @@ enum struct Key {
 
 enum struct MouseButton { LEFT, RIGHT, MIDDLE, COUNT };
 
+struct Modifiers {
+  bool shift : 1;
+  bool ctrl : 1;
+  bool alt : 1;
+  bool super : 1;
+};
+
+struct KeyInput {
+  Key key;
+  Modifiers modifiers;
+  bool text_key;
+
+  bool operator==(const Key &other) { return key == other; }
+
+  bool operator==(const KeyInput &other)
+  {
+    return key == other.key && modifiers.alt == other.modifiers.alt &&
+           modifiers.ctrl == other.modifiers.ctrl &&
+           modifiers.shift == other.modifiers.shift &&
+           modifiers.super == other.modifiers.super;
+  }
+  bool operator!=(const KeyInput &other)
+  {
+    return key != other.key || modifiers.alt != other.modifiers.alt ||
+           modifiers.ctrl != other.modifiers.ctrl ||
+           modifiers.shift != other.modifiers.shift ||
+           modifiers.super != other.modifiers.super;
+  }
+};
+
 struct Input {
   bool keys[(int)Key::COUNT]            = {};
   bool key_up_events[(int)Key::COUNT]   = {};
@@ -124,8 +155,8 @@ struct Input {
   bool mouse_button_down_events[(int)MouseButton::COUNT] = {};
   bool mouse_button_up_events[(int)MouseButton::COUNT]   = {};
 
-  Array<char, 128> text_input = {};
-  Array<Key, 128> key_input   = {};
+  Array<char, 128> text_inputs    = {};
+  Array<KeyInput, 128> key_inputs = {};
 
   double scrollwheel_count = 0;
 

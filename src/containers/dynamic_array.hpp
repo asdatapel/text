@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "memory.hpp"
 
 template <typename T>
@@ -16,18 +18,6 @@ struct DynamicArray {
     this->allocator = allocator;
 
     set_capacity(8);
-  }
-
-  void operator=(std::initializer_list<T> il)
-  {
-    resize(il.size());
-    size = il.size();
-
-    i32 i = 0;
-    for (auto t : il) {
-      data[i] = t;
-      i++;
-    }
   }
 
   T &operator[](i32 i)
@@ -101,6 +91,7 @@ struct DynamicArray {
   void set_capacity(i32 capacity)
   {
     assert(capacity >= size);
+  
     if (!data) {
         allocation = allocator->alloc(capacity * sizeof(T));
         data = (T*)allocation.data;
@@ -108,7 +99,12 @@ struct DynamicArray {
         return;
     }
     
-    allocation = allocator->resize(allocation, capacity * sizeof(T));
+
+    Mem old_allocation = allocation;
+    allocation = allocator->alloc(capacity * sizeof(T));
+    memcpy(allocation.data, old_allocation.data, old_allocation.size);
+    allocator->free(old_allocation);
+
     data = (T*)allocation.data;
     this->capacity = capacity;
   }

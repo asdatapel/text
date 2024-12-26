@@ -40,7 +40,7 @@ File read_file(String path, Allocator *allocator)
   return file;
 }
 
-void write_file(NullTerminatedString path, String file, b8 overwrite = false)
+void write_file(String filename, String file, b8 overwrite = false)
 {
   std::ios_base::openmode file_flags = std::ios::out | std::ios::binary;
   if (overwrite)
@@ -48,7 +48,7 @@ void write_file(NullTerminatedString path, String file, b8 overwrite = false)
   else
     file_flags |= std::ios::ate;
 
-  std::fstream out_stream((char *)path.data, file_flags);
+  std::fstream out_stream(filename.c_str(&tmp_allocator), file_flags);
   out_stream.write((char *)file.data, file.size);
   out_stream.close();
 }

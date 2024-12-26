@@ -38,9 +38,7 @@ struct Array {
 
   u32 push_back(T val)
   {
-    if (size >= MAX_SIZE) {
-      printf("Array overfull");
-    }
+    assert(size < MAX_SIZE && "static array past capacity");
 
     data[size] = val;
     return size++;
@@ -48,10 +46,7 @@ struct Array {
 
   i32 insert(u32 i, T val)
   {
-    if (size >= MAX_SIZE) {
-      printf("static array past capacity\n");
-      return -1;
-    }
+    assert(size < MAX_SIZE && "static array past capacity");
 
     memcpy(&data[i + 1], &data[i], sizeof(T) * (size - i));
     data[i] = val;
