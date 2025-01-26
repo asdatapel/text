@@ -1,24 +1,39 @@
 #pragma once
 
+#include "buffer_manager.hpp"
 #include "draw.hpp"
 #include "editor.hpp"
 #include "window.hpp"
 
 namespace Five
 {
-struct Menu : Focusable {
+
+struct Menu {
   Editor editor;
   BasicBuffer buffer;
 
   StackAllocator alloc = StackAllocator(&system_allocator, 32 * MB);
 
-  bool open = false;
+  bool open    = false;
   i32 selected = 0;
   bool entered = false;
 };
 
+void close_menu(Menu *menu)
+{
+  menu->selected = 0;
+  menu->entered  = false;
+  menu->open     = false;
+
+  clear_and_reset(&menu->editor);
+}
+
 void handle_action(Menu *menu, Action action)
 {
+  if (action == Command::ESCAPE) {
+    close_menu(menu);
+    return;
+  }
   if (action == Command::INPUT_NEWLINE) {
     menu->entered = true;
     return;
@@ -31,29 +46,86 @@ void handle_action(Menu *menu, Action action)
     menu->selected += 1;
     return;
   }
+
   handle_action(&menu->editor, action);
+}
+
+i32 score_match(bool first_letter, bool starting_word, bool is_adjacent,
+                i32 adjacent_matches)
+{
+  i32 score = 1;
+
+  if (first_letter) {
+    score += 30;
+  }
+
+  if (first_letter && starting_word) {
+    score += 30;
+  }
+
+  if (is_adjacent) {
+    score += 10;
+  }
+
+  return score * (1 + adjacent_matches);
+}
+
+bool is_starting_word(u32 prev_char, u32 current_char)
+{
+  return (!std::isalnum(prev_char) && std::isalnum(current_char)) ||
+         (std::islower(prev_char) && std::isupper(current_char));
+}
+
+void fuzzy_subscore(String query, String text, i32 *score, i32 *adjacent_matches)
+{
+  if (query.size == 0) {
+    *score = 0;
+    return;
+  }
+
+  for (i64 i = 0; i < text.size; i++) {
+    if (std::tolower(text[i]) == std::tolower(query[0])) {
+      i32 subscore              = -1000;
+      i32 next_adjacent_matches = 0;
+      fuzzy_subscore({query.data + 1, query.size - 1},
+                     {text.data + i + 1, text.size - (i + 1)}, &subscore,
+                     &next_adjacent_matches);
+
+      if (i == 0) {
+        *adjacent_matches = 1 + next_adjacent_matches;
+      }
+
+      i32 combined_score = score_match(false, is_starting_word(text[i - 1], text[i]),
+                                       i == 0, next_adjacent_matches) +
+                           subscore;
+      *score = std::max(*score, combined_score);
+    }
+  }
 }
 
 i32 fuzzy_score(String query, String text)
 {
-  i32 score = 0;
+  if (query.size == 0) {
+    return 0;
+  }
 
-  if (query.size == 0) return score;
-
+  int score = 0;
   for (i64 i = 0; i < text.size; i++) {
     if (std::tolower(text[i]) == std::tolower(query[0])) {
-      i32 base_score      = 1;
-      i32 adjacency_bonus = i == 0 ? 3 : 0;
+      i32 subscore         = -1000;
+      i32 adjacent_matches = 0;
+      fuzzy_subscore({query.data + 1, query.size - 1},
+                     {text.data + i + 1, text.size - (i + 1)}, &subscore,
+                     &adjacent_matches);
 
-      i32 subscore = fuzzy_score({query.data + 1, query.size - 1},
-                                 {text.data + i + 1, text.size - (i + 1)});
-
-      i32 combined_score = base_score + adjacency_bonus + subscore;
-      score              = std::max(score, combined_score);
+      bool starting_word = i == 0 ? true : is_starting_word(text[i - 1], text[i]);
+      i32 combined_score =
+          score_match(true, starting_word, false, adjacent_matches) + subscore;
+      score = std::max(score, combined_score);
     }
   }
 
-  return score;
+  return score - text.size;  // prefer shorter filenames
 }
 
 void sort(DynamicArray<std::pair<i32, i32>> arr)
@@ -84,12 +156,11 @@ void merge_sort(DynamicArray<std::pair<i32, i32>> src,
   merge_sort(dst, src, start, middle);
   merge_sort(dst, src, middle, end);
 
-  i32 left_cursor = start;
+  i32 left_cursor  = start;
   i32 right_cursor = middle;
   for (i32 i = start; i < end; i++) {
-    if (i < middle 
-        && src[left_cursor].second >= src[right_cursor].second
-        || right_cursor >= end){
+    if (i < middle && src[left_cursor].second >= src[right_cursor].second ||
+        right_cursor >= end) {
       dst[i] = src[left_cursor];
       left_cursor++;
     } else {
@@ -115,8 +186,10 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
   scores.set_capacity(files.size);
   for (i32 i = 0; i < files.size; i++) {
     i32 score = fuzzy_score({menu->buffer.data, menu->buffer.size}, files[i]);
-    scores.push_back({i, score});
-    sorted.push_back({i, score});
+    if (score > 0) {
+      scores.push_back({i, score});
+      sorted.push_back({i, score});
+    }
   }
   merge_sort(scores, sorted, 0, scores.size);
 
@@ -138,88 +211,47 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
   {
     String text = {menu->buffer.data, menu->buffer.size};
     Vec2f pos   = {margin, rect.y + margin};
-    for (i32 i = 0; i < text.size; i++) {
-      u8 c        = text[i];
-      Glyph glyph = font.glyphs_zero[c];
-
-      Rect4f shape_rect = {pos.x + glyph.bearing.x, pos.y + font.height - glyph.bearing.y,
-                           glyph.size.x, glyph.size.y};
-
-      Vec4f uv_bounds = {font.glyphs_zero[c].uv.x, font.glyphs_zero[c].uv.y,
-                         font.glyphs_zero[c].uv.x + font.glyphs_zero[c].uv.width,
-                         font.glyphs_zero[c].uv.y + font.glyphs_zero[c].uv.height};
-
-      Color color = Color(187, 194, 207);
-      push_bitmap_glyph(dl, 0, shape_rect, uv_bounds, color, 0);
-      pos.x += glyph.advance.x;
-    }
+    draw_string(dl, dl->font, {187, 194, 207}, text, pos);
   }
 
-  for (i32 i = 1; i < line_count; i++) {
+  for (i32 i = 1; i < line_count && i < sorted.size; i++) {
     String text = files[sorted[i - 1].first];
 
     if (i - 1 == menu->selected) {
       Rect4f line_rect = {
-        0,
-        rect.y + margin + i * line_height - font.descent,
-        dl->canvas_size.x,
-        line_height,
+          0,
+          rect.y + margin + i * line_height - font.descent,
+          dl->canvas_size.x,
+          line_height,
       };
 
       Draw::push_rect(dl, 0, line_rect, {.5f, .55f, .5f, 1.f});
     }
 
     Vec2f pos = {margin, rect.y + margin + i * line_height};
-    for (i32 i = 0; i < text.size; i++) {
-      u8 c        = text[i];
-      Glyph glyph = font.glyphs_zero[c];
+    pos = draw_string(dl, dl->font, {187, 194, 207}, text, pos);
+    {
+      pos.x += 5;
+      i32 score = fuzzy_score({menu->buffer.data, menu->buffer.size}, text);
+      u8 score_characters[32];
+      i32 str_len = snprintf((char *)score_characters, 32, "%i", score);
 
-      Rect4f shape_rect = {pos.x + glyph.bearing.x, pos.y + font.height - glyph.bearing.y,
-                           glyph.size.x, glyph.size.y};
-
-      Vec4f uv_bounds = {font.glyphs_zero[c].uv.x, font.glyphs_zero[c].uv.y,
-                         font.glyphs_zero[c].uv.x + font.glyphs_zero[c].uv.width,
-                         font.glyphs_zero[c].uv.y + font.glyphs_zero[c].uv.height};
-
-      Color color = Color(187, 194, 207);
-      push_bitmap_glyph(dl, 0, shape_rect, uv_bounds, color, 0);
-      pos.x += glyph.advance.x;
+      String score_str = {score_characters, str_len};
+      pos = draw_string(dl, dl->font, {187, 194, 207}, score_str, pos);
     }
-
-    // {
-    //   i32 score = fuzzy_score({menu->buffer.data, menu->buffer.size}, text);
-    //   u8 score_characters[32];
-    //   i32 str_len = snprintf((char *)score_characters, 32, "%i", score);
-
-    //   String score_str = {score_characters, str_len};
-
-    //   for (i32 i = 0; i < score_str.size; i++) {
-    //     u8 c        = score_str[i];
-    //     Glyph glyph = font.glyphs_zero[c];
-
-    //     Rect4f shape_rect = {pos.x + glyph.bearing.x,
-    //                          pos.y + font.height - glyph.bearing.y, glyph.size.x,
-    //                          glyph.size.y};
-
-    //     Vec4f uv_bounds = {font.glyphs_zero[c].uv.x, font.glyphs_zero[c].uv.y,
-    //                        font.glyphs_zero[c].uv.x + font.glyphs_zero[c].uv.width,
-    //                        font.glyphs_zero[c].uv.y + font.glyphs_zero[c].uv.height};
-
-    //     Color color = Color(187, 194, 207);
-    //     push_bitmap_glyph(dl, 0, shape_rect, uv_bounds, color, 0);
-    //     pos.x += glyph.advance.x;
-    //   }
-    // }
   }
 
   if (menu->entered) {
     menu->entered = false;
 
-    String filename = files[sorted[menu->selected].first];
-    BasicBuffer buffer = load_buffer(filename);
-    *(active_window->editor.buffer) = buffer;
+    if (files.size > 0 && sorted.size > 0) {
+      String filename              = files[sorted[menu->selected].first];
+      BasicBuffer *buffer          = buffer_manager.get_or_open_buffer(filename);
 
-    menu->open = false;
+      open_editor(active_window, buffer);
+    }
+
+    close_menu(menu);
   }
 }
 

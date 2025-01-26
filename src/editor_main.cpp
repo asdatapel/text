@@ -14,31 +14,74 @@
 
 namespace Five
 {
+
 struct WindowManager {
-  Window window;
+  Array<Window, 32> windows;
   Menu menu;
 
   i32 focused = 0;
+  Mode mode   = Mode::NORMAL;
 
   Mode get_focused_mode()
   {
     if (menu.open) {
-      return menu.mode;
+      return Mode::INSERT;
     }
-
-    return window.mode;
+    return mode;
   }
 
-  void handle_action(Action action)
+  Window *get_focused_window() { return &windows[focused]; }
+
+  void handle_action(Action action, Draw::List *dl)
   {
     if (menu.open) {
-      return ::Five::handle_action(&menu, action);
+      ::Five::handle_action(&menu, action);
+      return;
     }
 
-    return ::Five::handle_action(&window, action);
+    if (action == Command::BUFFER_CHANGE_MODE) {
+      static i32 i = 0;
+      i++;
+      if (mode == Mode::INSERT) {
+        mode = Mode::NORMAL;
+      } else if (mode == Mode::NORMAL) {
+        mode = Mode::INSERT;
+      }
+
+      return;
+    }
+    if (mode != Mode::INSERT) {
+      if (action == Command::INPUT_NEWLINE || action == Command::INPUT_TAB ||
+          action == Command::INPUT_BACKSPACE || action == Command::INPUT_TEXT) {
+        return;
+      }
+    }
+
+
+    if (action == Command::WINDOW_SWITCH_LEFT) {
+      focused = std::max(focused - 1, 0);
+    }
+    if (action == Command::WINDOW_SWITCH_RIGHT) {
+      focused = std::min(focused + 1, (i32)windows.size - 1);
+    }
+
+    if (action == Command::MOUSE_LEFT_CLICK || action == Command::MOUSE_RIGHT_CLICK) {
+      for (i32 i = 0; i < windows.size; i++) {
+        if (in_rect(action.mouse_position, windows[i].rect)) {
+          focused = i;
+          break;
+        }
+      }
+    }
+
+    if (!(action == Command::MOUSE_SCROLL)) {
+      error("Action: ", (i32)action.command);
+    }
+    ::Five::handle_action(&windows[focused], action, dl);
+    return;
   }
 
-  void add_window(Window window) { this->window = window; }
+  void add_window(Window window) { windows.push_back(window); }
 };
 
 int mymain()
@@ -46,25 +89,24 @@ int mymain()
   Input input;
   Chord chord;
   Actions actions;
-  BasicBuffer buffer = load_buffer("./blah.txt");
   WindowManager window_manager;
 
   Platform::init();
   Platform::GlfwWindow sys_window;
   sys_window.init();
   Platform::setup_input_callbacks(&sys_window, &input);
+  Platform::global_window_for_clipboard_access = &sys_window;
 
   Gpu::Device *device = Gpu::init(&sys_window);
 
   Draw::List dl;
   Draw::init_draw_system(&dl, device);
 
-  Vec2f window_size = sys_window.get_size();
-  {
-    Window window = init_window(device, &dl, &buffer, window_size);
-    set_window_buffer(&window, &buffer);
-    window_manager.add_window(window);
-  }
+  Vec2f canvas_size = sys_window.get_size();
+  Vec2f window_size = {canvas_size.x / 2, canvas_size.y - 40};
+  window_manager.add_window(init_window({0, 0, window_size.x, window_size.y}));
+  window_manager.add_window(
+      init_window({window_size.x, 0, window_size.x, window_size.y}));
 
   Gpu::Texture target_tex = Gpu::create_render_target_texture(
       device, window_size.x, window_size.y, PixelFormat::RGBA8U);
@@ -82,7 +124,7 @@ int mymain()
         continue;
       }
 
-      window_manager.handle_action(actions[i]);
+      window_manager.handle_action(actions[i], &dl);
     }
 
     if (capture == 0) {
@@ -93,11 +135,17 @@ int mymain()
     Gpu::start_backbuffer(device, Color(40, 44, 52));
 
     Draw::start_frame(&dl, sys_window.get_size());
-    draw_window(window_manager.window, device, &dl);
-    draw_status_bar(&dl, window_manager.get_focused_mode());
-    if (window_manager.menu.open) {
-      Five::draw_filemenu(&window_manager.menu, &dl, &window_manager.window);
+
+    for (i32 i = 0; i < window_manager.windows.size; i++) {
+      bool is_focused = window_manager.focused == i;
+      draw_window(window_manager.windows[i], &dl, is_focused);
+      draw_status_bar(&dl, &chord, window_manager.get_focused_mode());
     }
+
+    if (window_manager.menu.open) {
+      Five::draw_filemenu(&window_manager.menu, &dl, window_manager.get_focused_window());
+    }
+
     Draw::end_frame(&dl, device, capture);
 
     Gpu::end_backbuffer(device);

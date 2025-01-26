@@ -65,6 +65,15 @@ struct String {
     null_terminated[size] = '\0';
     return null_terminated;
   }
+
+  String copy(Allocator *allocator)
+  {
+    String copy;
+    copy.size = size;
+    copy.data = (u8 *)allocator->alloc(size).data;
+    memcpy(copy.data, data, size);
+    return copy;
+  }
 };
 
 struct NullTerminatedString : String {
@@ -175,4 +184,21 @@ struct StaticString {
     data[i] = value;
     size++;
   }
+
+  static StaticString<CAPACITY> from_i32(i32 x)
+  {
+    StaticString<CAPACITY> str;
+    str.size = snprintf((char *)str.data, CAPACITY, "%i", x);
+    return str;
+  }
 };
+
+bool is_only_whitespace(String text)
+{
+  for (i64 i = 0; i < text.size; i++) {
+    if (!std::isspace(text[i])) {
+      return false;
+    }
+  }
+  return true;
+}

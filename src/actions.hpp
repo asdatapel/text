@@ -9,11 +9,12 @@ enum struct Mode {
   NORMAL,
   INSERT,
 };
-struct Focusable {
-  Mode mode = Mode::INSERT;
-};
 
 enum struct Command {
+  MOUSE_LEFT_CLICK,
+  MOUSE_RIGHT_CLICK,
+  MOUSE_SCROLL,
+
   INPUT_TEXT,
   INPUT_NEWLINE,
   INPUT_TAB,
@@ -35,15 +36,26 @@ enum struct Command {
   NAV_WORD_LEFT,
   NAV_WORD_RIGHT,
   NAV_JUMP_TO_ANCHOR,
+  NAV_BLOCK_UP,
+  NAV_BLOCK_DOWN,
 
   WINDOW_SCROLL_UP,
   WINDOW_SCROLL_DOWN,
+  WINDOW_SWITCH_LEFT,
+  WINDOW_SWITCH_RIGHT,
 
   MENU_QUICK_OPEN,
+  TOGGLE_FIND,
+  JUMP_TO_NEXT,
+
+  ESCAPE,
 };
 struct Action {
   Command command;
+
   u32 character;
+  Vec2f mouse_position;
+  f32 scrollwheel_delta;
 
   Action() {}
   Action(Command command) { this->command = command; }
@@ -59,6 +71,19 @@ typedef Array<Action, 128> Actions;
 
 typedef Array<KeyInput, 8> Chord;
 Array<std::pair<Chord, Command>, 1024> bindings = {
+    {Chord{{Key::ENTER}}, Command::INPUT_NEWLINE},
+    {Chord{{Key::TAB}}, Command::INPUT_TAB},
+    {Chord{{Key::BACKSPACE}}, Command::INPUT_BACKSPACE},
+    {Chord{{Key::DEL}}, Command::INPUT_DELETE},
+
+    {Chord{{Key::S, Modifiers::with_super()}}, Command::BUFFER_SAVE},
+    {Chord{{Key::SPACE}, {Key::B}, {Key::S}}, Command::BUFFER_SAVE},
+    {Chord{{Key::A}}, Command::BUFFER_PLACE_ANCHOR},
+    {Chord{{Key::Y}}, Command::BUFFER_COPY},
+    {Chord{{Key::P}}, Command::BUFFER_PASTE},
+    {Chord{{Key::LALT}}, Command::BUFFER_CHANGE_MODE},
+    {Chord{{Key::RALT}}, Command::BUFFER_CHANGE_MODE},
+
     {Chord{{Key::H}}, Command::NAV_CHAR_LEFT},
     {Chord{{Key::LEFT}}, Command::NAV_CHAR_LEFT},
     {Chord{{Key::L}}, Command::NAV_CHAR_RIGHT},
@@ -69,21 +94,18 @@ Array<std::pair<Chord, Command>, 1024> bindings = {
     {Chord{{Key::UP}}, Command::NAV_LINE_UP},
     {Chord{{Key::B}}, Command::NAV_WORD_LEFT},
     {Chord{{Key::E}}, Command::NAV_WORD_RIGHT},
+    {Chord{{Key::LEFT_CURLY_BRACE}}, Command::NAV_BLOCK_UP},
+    {Chord{{Key::RIGHT_CURLY_BRACE}}, Command::NAV_BLOCK_DOWN},
 
-    {Chord{{Key::ENTER}}, Command::INPUT_NEWLINE},
-    {Chord{{Key::TAB}}, Command::INPUT_TAB},
-    {Chord{{Key::BACKSPACE}}, Command::INPUT_BACKSPACE},
-    {Chord{{Key::DEL}}, Command::INPUT_DELETE},
+    {Chord{{Key::SPACE}, {Key::W}, {Key::H}}, Command::WINDOW_SWITCH_LEFT},
+    {Chord{{Key::SPACE}, {Key::W}, {Key::L}}, Command::WINDOW_SWITCH_RIGHT},
 
     {Chord{{Key::SPACE}, {Key::SPACE}}, Command::MENU_QUICK_OPEN},
+    {Chord{{Key::F}}, Command::TOGGLE_FIND},
+    {Chord{{Key::E}}, Command::JUMP_TO_NEXT},
 
-    {Chord{{Key::S, Modifiers{.super = true}}}, Command::BUFFER_SAVE},
-    {Chord{{Key::A}}, Command::BUFFER_PLACE_ANCHOR},
-    {Chord{{Key::Y}}, Command::BUFFER_COPY},
-    {Chord{{Key::P}}, Command::BUFFER_PASTE},
-
-    {Chord{{Key::LALT}}, Command::BUFFER_CHANGE_MODE},
-    {Chord{{Key::RALT}}, Command::BUFFER_CHANGE_MODE},
+    {Chord{{Key::G}}, Command::ESCAPE},
+    {Chord{{Key::G, Modifiers::with_ctrl()}}, Command::ESCAPE},
 };
 
 bool match_chord(Chord *chord, Chord *binding, bool *any_partial_matches)
@@ -113,31 +135,47 @@ void process_input(Input *input, Actions *actions, Chord *chord, Mode mode)
     }
   }
 
+  if (input->mouse_button_up_events[(i32)MouseButton::LEFT]) {
+    Action action;
+    action.command = Command::MOUSE_LEFT_CLICK;
+    action.mouse_position = input->mouse_pos;
+    actions->push_back(action);
+  }
+  if (input->mouse_button_up_events[(i32)MouseButton::RIGHT]) {
+    Action action;
+    action.command = Command::MOUSE_RIGHT_CLICK;
+    action.mouse_position = input->mouse_pos;
+    actions->push_back(action);
+  }
+  {
+    Action action;
+    action.command = Command::MOUSE_SCROLL;
+    action.mouse_position = input->mouse_pos;
+    action.scrollwheel_delta = input->scrollwheel_count;
+    actions->push_back(action);
+  }
+
   for (i32 i = 0; i < input->key_inputs.size; i++) {
     KeyInput key = input->key_inputs[i];
-
-    error("ASDASD, ", chord->size, ", ", key.text_key);
-    if (key.text_key && mode == Mode::INSERT && chord->size == 0) {
+    if (key.text_key && 
+        mode == Mode::INSERT &&
+        key.modifiers == Modifiers{} &&
+        chord->size == 0) {
       break;
     }
-    error("QWEE, ", chord->size, ", ", key.text_key);
 
     chord->push_back(key);
   }
 
   bool any_partial_matches = false;
   if (chord->size > 0) {
-    error("POIU, ", chord->size);
     for (i32 i = 0; i < bindings.size; i++) {
       if (match_chord(chord, &bindings[i].first, &any_partial_matches)) {
-        chord->clear();
         actions->push_back(bindings[i].second);
-        error("BINDING ", i);
       }
     }
 
     if (!any_partial_matches) {
-      error("ZXC, ", chord->size);
       chord->clear();
     }
   }

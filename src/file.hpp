@@ -12,32 +12,29 @@ struct File {
   Mem mem;
 };
 
-File read_file(String path, Allocator *allocator)
+bool read_file(String path, Allocator *allocator, File *file)
 {
   Temp tmp;
-  Mem null_terminated_path = tmp.alloc(path.size + 1);
-  memcpy(null_terminated_path.data, path.data, path.size);
-  null_terminated_path.data[path.size] = '\0';
+  std::ifstream in_stream(path.c_str(&tmp), std::ios::binary | std::ios::ate);
+  if (!in_stream.is_open()) {
+    return false;
+  }
 
-  std::ifstream in_stream((char *)null_terminated_path.data,
-                          std::ios::binary | std::ios::ate);
   u64 file_size = in_stream.tellg();
+  file->mem     = allocator->alloc(path.size + file_size);
 
-  File file;
-  file.mem = allocator->alloc(path.size + file_size);
+  file->path.data = file->mem.data;
+  file->path.size = path.size;
+  memcpy(file->path.data, path.data, path.size);
 
-  file.path.data = file.mem.data;
-  file.path.size = path.size;
-  memcpy(file.path.data, path.data, path.size);
-
-  file.data.data = file.mem.data + file.path.size;
-  file.data.size = file_size;
+  file->data.data = file->mem.data + file->path.size;
+  file->data.size = file_size;
 
   in_stream.seekg(0, std::ios::beg);
-  in_stream.read((char *)file.data.data, file.data.size);
+  in_stream.read((char *)file->data.data, file->data.size);
   in_stream.close();
 
-  return file;
+  return true;
 }
 
 void write_file(String filename, String file, b8 overwrite = false)

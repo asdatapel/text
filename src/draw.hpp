@@ -94,7 +94,7 @@ struct DrawCall {
 
 struct DrawSettings {
   b8 force_scissor = false;
-  u32 scissor_idx = 0;
+  u32 scissor_idx  = 0;
 };
 
 struct List {
@@ -133,20 +133,18 @@ struct List {
   i32 max_z = 0;
 };
 
-void push_draw_settings(List *dl, DrawSettings ds) {
-  dl->settings.push_back(ds);
-}
-void pop_draw_settings(List *dl) {
-  dl->settings.pop();
-}
+void push_draw_settings(List *dl, DrawSettings ds) { dl->settings.push_back(ds); }
+void pop_draw_settings(List *dl) { dl->settings.pop(); }
 
-u32 get_current_scissor_idx(List *dl) {
+u32 get_current_scissor_idx(List *dl)
+{
   if (dl->settings.size > 0 && dl->settings.top().force_scissor) {
     return dl->settings.top().scissor_idx;
   }
   return dl->scissor_idxs.top();
 }
-Rect4f get_current_scissor(List *dl) {
+Rect4f get_current_scissor(List *dl)
+{
   if (dl->settings.size > 0 && dl->settings.top().force_scissor) {
     return dl->primitives.clip_rects[dl->settings.top().scissor_idx].rect;
   }
@@ -217,23 +215,21 @@ enum CornerMask : u32 {
   BOTTOM       = BOTTOM_LEFT | BOTTOM_RIGHT,
   ALL          = TOP | BOTTOM,
 };
-u32 push_primitive_rounded_rect(List *dl, Rect4f rect, Color color,
-                                f32 corner_radius, u32 corner_mask)
+u32 push_primitive_rounded_rect(List *dl, Rect4f rect, Color color, f32 corner_radius,
+                                u32 corner_mask)
 {
   dl->primitives.rounded_rects[dl->rounded_rects_count++] = {
-      rect, get_current_scissor_idx(dl), color_to_int(color), corner_radius,
-      corner_mask};
+      rect, get_current_scissor_idx(dl), color_to_int(color), corner_radius, corner_mask};
 
   return dl->rounded_rects_count - 1;
 }
 
-RoundedRectPrimitive *push_rounded_rect(List *dl, i32 z, Rect4f rect,
-                                        f32 corner_radius, Color color,
-                                        u32 corner_mask = CornerMask::ALL)
+RoundedRectPrimitive *push_rounded_rect(List *dl, i32 z, Rect4f rect, f32 corner_radius,
+                                        Color color, u32 corner_mask = CornerMask::ALL)
 {
   auto push_rect_vert = [](List *dl, u32 primitive_index, u8 corner) {
-    dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::ROUNDED_RECT |
-                                   CORNERS[corner] | primitive_index};
+    dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::ROUNDED_RECT | CORNERS[corner] |
+                                   primitive_index};
   };
 
   if (!overlaps(rect, get_current_scissor(dl))) {
@@ -260,8 +256,8 @@ RoundedRectPrimitive *push_rect(List *dl, i32 z, Rect4f rect, Color color)
   return push_rounded_rect(dl, z, rect, 0, color);
 }
 
-u32 push_primitive_bitmap_glyph(List *dl, Rect4f rect, Vec4f uv_bounds,
-                                Color color, u32 texture_idx)
+u32 push_primitive_bitmap_glyph(List *dl, Rect4f rect, Vec4f uv_bounds, Color color,
+                                u32 texture_idx)
 {
   dl->primitives.bitmap_glyphs[dl->bitmap_glyphs_count++] = {
       rect, uv_bounds, get_current_scissor_idx(dl), color_to_int(color), texture_idx};
@@ -269,19 +265,20 @@ u32 push_primitive_bitmap_glyph(List *dl, Rect4f rect, Vec4f uv_bounds,
   return dl->bitmap_glyphs_count - 1;
 }
 
-void push_bitmap_glyph(List *dl, i32 z, Rect4f rect, Vec4f uv_bounds,
-                       Color color, u32 texture_idx)
+void push_bitmap_glyph(List *dl, i32 z, Rect4f rect, Vec4f uv_bounds, Color color,
+                       u32 texture_idx)
 {
   auto push_glyph_vert = [](List *dl, u32 primitive_index, u8 corner) {
-    dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::BITMAP_GLYPH |
-                                   CORNERS[corner] | primitive_index};
+    dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::BITMAP_GLYPH | CORNERS[corner] |
+                                   primitive_index};
   };
 
   if (!overlaps(rect, get_current_scissor(dl))) {
     return;
   }
 
-  u32 primitive_idx = push_primitive_bitmap_glyph(dl, rect, uv_bounds, color, texture_idx);
+  u32 primitive_idx =
+      push_primitive_bitmap_glyph(dl, rect, uv_bounds, color, texture_idx);
 
   push_glyph_vert(dl, primitive_idx, 0);
   push_glyph_vert(dl, primitive_idx, 1);
@@ -312,7 +309,8 @@ void push_bitmap_glyph(List *dl, i32 z, Rect4f rect, Vec4f uv_bounds,
 //                        c.uv.y};
 //     push_bitmap_glyph(dl, z, shape_rect, uv_bounds, color, 0);
 
-//     error(height, ", ", font.font_size_px, ", ", resize_ratio, ", ", shape_rect.x, shape_rect.y, shape_rect.width, shape_rect.height);
+//     error(height, ", ", font.font_size_px, ", ", resize_ratio, ", ", shape_rect.x,
+//     shape_rect.y, shape_rect.width, shape_rect.height);
 //   }
 // };
 
@@ -333,26 +331,24 @@ void push_bitmap_glyph(List *dl, i32 z, Rect4f rect, Vec4f uv_bounds,
 void push_texture_rect(List *dl, i32 z, Rect4f rect, Vec4f uv_bounds,
                        Gpu::Texture texture)
 {
-  auto push_primitive_texture_rect = [](List *dl, Rect4f rect,
-                                        Vec4f uv_bounds, i32 texture_idx) {
+  auto push_primitive_texture_rect = [](List *dl, Rect4f rect, Vec4f uv_bounds,
+                                        i32 texture_idx) {
     dl->primitives.texture_rects[dl->texture_rects_count++] = {
         rect, uv_bounds, texture_idx, get_current_scissor_idx(dl)};
 
     return dl->texture_rects_count - 1;
   };
-  auto push_texture_rect_vert = [](List *dl, u32 primitive_index,
-                                   u8 corner) {
-    dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::TEXTURE_RECT |
-                                   CORNERS[corner] | primitive_index};
+  auto push_texture_rect_vert = [](List *dl, u32 primitive_index, u8 corner) {
+    dl->verts[dl->vert_count++] = {(u32)PrimitiveIds::TEXTURE_RECT | CORNERS[corner] |
+                                   primitive_index};
   };
 
   if (!overlaps(rect, get_current_scissor(dl))) {
     return;
   }
 
-  i32 texture_idx = push_texture(dl, texture);
-  u32 primitive_idx =
-      push_primitive_texture_rect(dl, rect, uv_bounds, texture_idx);
+  i32 texture_idx   = push_texture(dl, texture);
+  u32 primitive_idx = push_primitive_texture_rect(dl, rect, uv_bounds, texture_idx);
 
   push_texture_rect_vert(dl, primitive_idx, 0);
   push_texture_rect_vert(dl, primitive_idx, 1);
@@ -379,8 +375,8 @@ void push_line(List *dl, i32 z, Vec2f a, Vec2f b, Color color)
                                    primitive_index};
   };
 
-  Vec2f mins        = min(a, b);
-  Vec2f maxs        = max(a, b);
+  Vec2f mins          = min(a, b);
+  Vec2f maxs          = max(a, b);
   Rect4f bounding_box = {mins.x, mins.y, maxs.x - mins.x, maxs.y - mins.y};
   if (!overlaps(bounding_box, get_current_scissor(dl))) {
     return;
@@ -398,12 +394,11 @@ void push_line(List *dl, i32 z, Vec2f a, Vec2f b, Color color)
   push_draw_call(dl, 2, z);
 }
 
-void push_cubic_spline(List *dl, i32 z, Vec2f p[4], Color color,
-                       i32 n_segments)
+void push_cubic_spline(List *dl, i32 z, Vec2f p[4], Color color, i32 n_segments)
 {
   auto evaluate_spline = [&](f32 t) {
-    f32 t2 = t * t;
-    f32 t3 = t2 * t;
+    f32 t2  = t * t;
+    f32 t3  = t2 * t;
     Vec2f a = (-p[0] + 3 * p[1] - 3 * p[2] + p[3]) * t3;
     Vec2f b = (3 * p[0] - 6 * p[1] + 3 * p[2]) * t2;
     Vec2f c = (-3 * p[0] + 3 * p[1]) * t;
@@ -413,10 +408,10 @@ void push_cubic_spline(List *dl, i32 z, Vec2f p[4], Color color,
   };
 
   for (i32 i = 0; i < n_segments; i++) {
-    f32 t0  = (f32)i / n_segments;
-    f32 t1  = (f32)(i + 1) / n_segments;
+    f32 t0      = (f32)i / n_segments;
+    f32 t1      = (f32)(i + 1) / n_segments;
     Vec2f start = evaluate_spline(t0);
-    Vec2f end = evaluate_spline(t1);
+    Vec2f end   = evaluate_spline(t1);
 
     push_line(dl, z, start, end, color);
   }
@@ -426,26 +421,27 @@ void init_draw_system(List *dl, Gpu::Device *gpu)
 {
   Gpu::ShaderArgumentDefinition shader_arg_def_primitives;
   shader_arg_def_primitives.type = Gpu::ShaderArgumentDefinition::Type::DATA;
-  shader_arg_def_primitives.access = (Gpu::Access) (Gpu::Access::WRITE | Gpu::Access::READ);
+  shader_arg_def_primitives.access =
+      (Gpu::Access)(Gpu::Access::WRITE | Gpu::Access::READ);
   Gpu::ShaderArgumentDefinition shader_arg_def_textures;
-  shader_arg_def_textures.type = Gpu::ShaderArgumentDefinition::Type::TEXTURE;
-  shader_arg_def_textures.access = (Gpu::Access) (Gpu::Access::READ);
-  shader_arg_def_textures.count = 128;
+  shader_arg_def_textures.type   = Gpu::ShaderArgumentDefinition::Type::TEXTURE;
+  shader_arg_def_textures.access = (Gpu::Access)(Gpu::Access::READ);
+  shader_arg_def_textures.count  = 128;
   Gpu::PipelineDefinition pipeline_def;
   pipeline_def.vert_shader = "vertex_shader";
   pipeline_def.frag_shader = "fragment_shader";
-  pipeline_def.arg_defs = {shader_arg_def_primitives, shader_arg_def_textures};
-  pipeline_def.format = PixelFormat::UNKNOWN;
-  dl->pipeline = Gpu::create_pipeline(gpu, pipeline_def);
+  pipeline_def.arg_defs    = {shader_arg_def_primitives, shader_arg_def_textures};
+  pipeline_def.format      = PixelFormat::UNKNOWN;
+  dl->pipeline             = Gpu::create_pipeline(gpu, pipeline_def);
 
-  dl->shader_args = Gpu::create_shader_arg_buffer(gpu, &dl->pipeline);
-  dl->primitive_buffer = Gpu::create_buffer(gpu, 128*MB);
+  dl->shader_args      = Gpu::create_shader_arg_buffer(gpu, &dl->pipeline);
+  dl->primitive_buffer = Gpu::create_buffer(gpu, 128 * MB);
   Gpu::bind_shader_buffer_data(dl->shader_args, dl->primitive_buffer, 0, 0);
 
   dl->verts        = (u32 *)malloc(sizeof(u32) * 1024 * 1024);
   dl->index_buffer = create_buffer(gpu, MB);
 
-  dl->font = load_font("resources/fonts/jetbrains/JetBrainsMono-Medium.ttf", 24);
+  dl->font         = load_font("resources/fonts/jetbrains/JetBrainsMono-Medium.ttf", 24);
   dl->font_texture = Gpu::create_texture(gpu, dl->font.bitmap);
 }
 
@@ -491,11 +487,15 @@ void end_frame(List *dl, Gpu::Device *gpu, u64 frame)
   // bind_shader_args()
   {
     gpu->render_command_encoder->setVertexBuffer(dl->shader_args.buffer.mtl_buffer, 0, 0);
-    gpu->render_command_encoder->setFragmentBuffer(dl->shader_args.buffer.mtl_buffer, 0, 0);
-    gpu->render_command_encoder->useResource(dl->primitive_buffer.mtl_buffer, MTL::ResourceUsageRead, MTL::RenderStageFragment | MTL::RenderStageVertex);
+    gpu->render_command_encoder->setFragmentBuffer(dl->shader_args.buffer.mtl_buffer, 0,
+                                                   0);
+    gpu->render_command_encoder->useResource(
+        dl->primitive_buffer.mtl_buffer, MTL::ResourceUsageRead,
+        MTL::RenderStageFragment | MTL::RenderStageVertex);
 
-    if(dl->texture_count > 0) {
-      gpu->render_command_encoder->useResource(dl->textures[0].mtl_texture, MTL::ResourceUsageRead, MTL::RenderStageFragment);
+    if (dl->texture_count > 0) {
+      gpu->render_command_encoder->useResource(
+          dl->textures[0].mtl_texture, MTL::ResourceUsageRead, MTL::RenderStageFragment);
     }
   }
 
@@ -504,11 +504,40 @@ void end_frame(List *dl, Gpu::Device *gpu, u64 frame)
     for (i32 i = 0; i < dl->draw_calls.size; i++) {
       DrawCall call = dl->draw_calls[i];
       if (call.z == z) {
-        Gpu::draw_indexed(gpu, dl->index_buffer, call.vert_offset,
-                          call.tri_count * 3);
+        Gpu::draw_indexed(gpu, dl->index_buffer, call.vert_offset, call.tri_count * 3);
       }
     }
   }
 }
 
-}  // namespace Dui
+// returns next position
+Vec2f draw_char(Draw::List *dl, Font &font, Color color, u32 character, Vec2f pos)
+{
+  if (character >= font.glyphs_zero.size) {
+    character = 0;
+  }
+
+  Glyph glyph = font.glyphs_zero[character];
+
+  Rect4f shape_rect = {pos.x + glyph.bearing.x, pos.y + font.height - glyph.bearing.y,
+                       glyph.size.x, glyph.size.y};
+  Vec4f uv_bounds   = {
+      font.glyphs_zero[character].uv.x, font.glyphs_zero[character].uv.y,
+      font.glyphs_zero[character].uv.x + font.glyphs_zero[character].uv.width,
+      font.glyphs_zero[character].uv.y + font.glyphs_zero[character].uv.height};
+  push_bitmap_glyph(dl, 0, shape_rect, uv_bounds, color, 0);
+
+  pos.x += glyph.advance.x;
+  return pos;
+}
+
+// returns next position
+Vec2f draw_string(Draw::List *dl, Font &font, Color color, String string, Vec2f pos)
+{
+  for (i32 i = 0; i < string.size; i++) {
+    pos = draw_char(dl, dl->font, color, string[i], pos);
+  }
+  return pos;
+}
+
+}  // namespace Draw

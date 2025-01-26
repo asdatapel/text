@@ -30,7 +30,10 @@ struct Image {
 Image read_image_file(String path, Allocator *allocator)
 {
   Temp temp;
-  File file = read_file(path, &temp);
+  File file;
+  if (!read_file(path, &temp, &file)) {
+    fatal("failed to read image file: ", path);
+  }
 
   Vec2i size;
   i32 channels       = 0;

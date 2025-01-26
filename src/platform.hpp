@@ -140,10 +140,10 @@ void key_input_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i
   Input *input = static_cast<Input *>(glfwGetWindowUserPointer(window));
 
   Modifiers modifiers = {
-      .shift = static_cast<bool>(mods & (GLFW_MOD_SHIFT | GLFW_MOD_CAPS_LOCK)),
-      .ctrl  = static_cast<bool>(mods & GLFW_MOD_CONTROL),
-      .alt   = static_cast<bool>(mods & GLFW_MOD_ALT),
-      .super = static_cast<bool>(mods & GLFW_MOD_SUPER),
+      static_cast<bool>(mods & (GLFW_MOD_SHIFT | GLFW_MOD_CAPS_LOCK)),
+      static_cast<bool>(mods & GLFW_MOD_CONTROL),
+      static_cast<bool>(mods & GLFW_MOD_ALT),
+      static_cast<bool>(mods & GLFW_MOD_SUPER),
   };
 
   auto append_if_press = [&](Key k, bool text_key = false) {
@@ -163,6 +163,7 @@ void key_input_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i
 
   auto append_if_press_text_key = [&](Key unshifted, Key shifted) {
     if (mods & (GLFW_MOD_SHIFT | GLFW_MOD_CAPS_LOCK)) {
+      modifiers.set_shift(false);
       append_if_press(shifted, true);
     } else {
       append_if_press(unshifted, true);
@@ -174,7 +175,7 @@ void key_input_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i
       append_if_press(Key::TAB);
       break;
     case GLFW_KEY_SPACE:
-      append_if_press(Key::SPACE);
+      append_if_press_text_key(Key::SPACE, Key::SPACE);
       break;
     case GLFW_KEY_ENTER:
     case GLFW_KEY_KP_ENTER:
@@ -229,82 +230,82 @@ void key_input_callback(GLFWwindow *window, i32 key, i32 scancode, i32 action, i
       break;
 
     case GLFW_KEY_A:
-      append_if_press_text_key(Key::A, Key::A);
+      append_if_press(Key::A, true);
       break;
     case GLFW_KEY_B:
-      append_if_press_text_key(Key::B, Key::B);
+      append_if_press(Key::B, true);
       break;
     case GLFW_KEY_C:
-      append_if_press_text_key(Key::C, Key::C);
+      append_if_press(Key::C, true);
       break;
     case GLFW_KEY_D:
-      append_if_press_text_key(Key::D, Key::D);
+      append_if_press(Key::D, true);
       break;
     case GLFW_KEY_E:
-      append_if_press_text_key(Key::E, Key::E);
+      append_if_press(Key::E, true);
       break;
     case GLFW_KEY_F:
-      append_if_press_text_key(Key::F, Key::F);
+      append_if_press(Key::F, true);
       break;
     case GLFW_KEY_G:
-      append_if_press_text_key(Key::G, Key::G);
+      append_if_press(Key::G, true);
       break;
     case GLFW_KEY_H:
-      append_if_press_text_key(Key::H, Key::H);
+      append_if_press(Key::H, true);
       break;
     case GLFW_KEY_I:
-      append_if_press_text_key(Key::I, Key::I);
+      append_if_press(Key::I, true);
       break;
     case GLFW_KEY_J:
-      append_if_press_text_key(Key::J, Key::J);
+      append_if_press(Key::J, true);
       break;
     case GLFW_KEY_K:
-      append_if_press_text_key(Key::K, Key::K);
+      append_if_press(Key::K, true);
       break;
     case GLFW_KEY_L:
-      append_if_press_text_key(Key::L, Key::L);
+      append_if_press(Key::L, true);
       break;
     case GLFW_KEY_M:
-      append_if_press_text_key(Key::M, Key::M);
+      append_if_press(Key::M, true);
       break;
     case GLFW_KEY_N:
-      append_if_press_text_key(Key::N, Key::N);
+      append_if_press(Key::N, true);
       break;
     case GLFW_KEY_O:
-      append_if_press_text_key(Key::O, Key::O);
+      append_if_press(Key::O, true);
       break;
     case GLFW_KEY_P:
-      append_if_press_text_key(Key::P, Key::P);
+      append_if_press(Key::P, true);
       break;
     case GLFW_KEY_Q:
-      append_if_press_text_key(Key::Q, Key::Q);
+      append_if_press(Key::Q, true);
       break;
     case GLFW_KEY_R:
-      append_if_press_text_key(Key::R, Key::R);
+      append_if_press(Key::R, true);
       break;
     case GLFW_KEY_S:
-      append_if_press_text_key(Key::S, Key::S);
+      append_if_press(Key::S, true);
       break;
     case GLFW_KEY_T:
-      append_if_press_text_key(Key::T, Key::T);
+      append_if_press(Key::T, true);
       break;
     case GLFW_KEY_U:
-      append_if_press_text_key(Key::U, Key::U);
+      append_if_press(Key::U, true);
       break;
     case GLFW_KEY_V:
-      append_if_press_text_key(Key::V, Key::V);
+      append_if_press(Key::V, true);
       break;
     case GLFW_KEY_W:
-      append_if_press_text_key(Key::W, Key::W);
+      append_if_press(Key::W, true);
       break;
     case GLFW_KEY_X:
-      append_if_press_text_key(Key::X, Key::X);
+      append_if_press(Key::X, true);
       break;
     case GLFW_KEY_Y:
-      append_if_press_text_key(Key::Y, Key::Y);
+      append_if_press(Key::Y, true);
       break;
     case GLFW_KEY_Z:
-      append_if_press_text_key(Key::Z, Key::Z);
+      append_if_press(Key::Z, true);
       break;
 
     case GLFW_KEY_GRAVE_ACCENT:
@@ -475,16 +476,6 @@ void setup_input_callbacks(GlfwWindow *window, Input *input)
   glfwSetScrollCallback(window->ref, scroll_callback);
 }
 
-String get_clipboard(GlfwWindow *window)
-{
-  const char *str = glfwGetClipboardString(window->ref);
-  return {(u8 *)str, (u32)strlen(str)};
-}
-void set_clipboard(GlfwWindow *window, String str)
-{
-  glfwSetClipboardString(window->ref, str.c_str(&tmp_allocator));
-}
-
 DynamicArray<String> list_files(String root, StackAllocator *alloc)
 {
   DynamicArray<String> files(alloc);
@@ -492,14 +483,32 @@ DynamicArray<String> list_files(String root, StackAllocator *alloc)
 
   std::filesystem::path root_path = std::string((char *)root.data, root.size);
   for (const auto &entry : std::filesystem::recursive_directory_iterator(root_path)) {
+    if (entry.is_directory()) {
+      continue;
+    }
+
     String filename;
-    filename.size = entry.path().string().size();
+    filename.size = entry.path().lexically_normal().string().size();
     filename.data = alloc->alloc(filename.size).data;
-    memcpy(filename.data, entry.path().string().data(), filename.size);
+    memcpy(filename.data, entry.path().lexically_normal().string().data(), filename.size);
 
     files.push_back(filename);
   }
 
   return files;
+}
+
+GlfwWindow *global_window_for_clipboard_access = nullptr;
+void set_clipboard(String str)
+{
+  glfwSetClipboardString(global_window_for_clipboard_access->ref,
+                         str.c_str(&tmp_allocator));
+}
+String get_clipboard()
+{
+  const char *str = glfwGetClipboardString(global_window_for_clipboard_access->ref);
+  
+
+  return {(u8 *)str, str ? (u32)strlen(str) : 0};
 }
 }  // namespace Platform

@@ -171,7 +171,10 @@ Font load_font(String filename, f32 size)
   }
 
   Temp temp;
-  File file = read_file(filename, &temp);
+  File file;
+  if (!read_file(filename, &temp, &file)) {
+    fatal("failed to read font file?");
+  }
 
   FT_Face face;
   err = FT_New_Memory_Face(library, file.data.data, file.data.size, 0, &face);

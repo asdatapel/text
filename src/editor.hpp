@@ -9,6 +9,7 @@
 #include "gpu/metal/texture.hpp"
 #include "input.hpp"
 #include "platform.hpp"
+#include "settings.hpp"
 
 namespace Five
 {
@@ -19,6 +20,8 @@ struct Editor {
   TextPoint cursor = FILE_START;
   TextPoint anchor = FILE_START;
   i64 want_column  = 0.f;
+
+  f32 scroll = 0.f;
 };
 
 void handle_action(Editor *editor, Action action)
@@ -26,21 +29,21 @@ void handle_action(Editor *editor, Action action)
   if (action == Command::BUFFER_PLACE_ANCHOR) {
     editor->anchor = editor->cursor;
   }
-  // if (action == Command::BUFFER_COPY) {
-  //   i64 start = std::min(editor->cursor.idx, editor->anchor.idx);
-  //   i64 end   = std::max(editor->cursor.idx, editor->anchor.idx);
+  if (action == Command::BUFFER_COPY) {
+    i64 start = std::min(editor->cursor.idx - 1, editor->anchor.idx);
+    i64 end   = std::max(editor->cursor.idx - 1, editor->anchor.idx);
 
-  //   String copy_str;
-  //   copy_str.data = editor->buffer->data + start;
-  //   copy_str.size = end - start + 1;
-  //   Platform::set_clipboard(platform_editor, copy_str);
-  // }
-  // if (action == Command::BUFFER_PASTE) {
-  //   String paste_str = Platform::get_clipboard(platform_editor);
-  //   for (i32 i = 0; i < paste_str.size; i++) {
-  //     editor->cursor = buffer_insert(editor->buffer, editor->cursor, paste_str.data[i]);
-  //   }
-  // }
+    String copy_str;
+    copy_str.data = editor->buffer->data + start;
+    copy_str.size = end - start + 1;
+    Platform::set_clipboard(copy_str);
+  }
+  if (action == Command::BUFFER_PASTE) {
+    String paste_str = Platform::get_clipboard();
+    for (i32 i = 0; i < paste_str.size; i++) {
+      editor->cursor = buffer_insert(editor->buffer, editor->cursor, paste_str.data[i]);
+    }
+  }
 
   if (action == Command::NAV_LINE_DOWN) {
     editor->cursor =
@@ -82,6 +85,21 @@ void handle_action(Editor *editor, Action action)
     }
     editor->want_column = editor->cursor.column;
   }
+  if (action == Command::NAV_BLOCK_UP) {
+    i64 line = editor->cursor.line - 1;
+    while (line >= 0 && !is_only_whitespace(get_line_contents(editor->buffer, line))) {
+      line--;
+    }
+    editor->cursor = find_position(editor->buffer, line, editor->want_column);
+  }
+  if (action == Command::NAV_BLOCK_DOWN) {
+    i64 line = editor->cursor.line + 1;
+    while (line < count_lines(editor->buffer) &&
+           !is_only_whitespace(get_line_contents(editor->buffer, line))) {
+      line++;
+    }
+    editor->cursor = find_position(editor->buffer, line, editor->want_column);
+  }
 
   if (action == Command::INPUT_NEWLINE) {
     buffer_insert(editor->buffer, editor->cursor, '\n');
@@ -96,97 +114,74 @@ void handle_action(Editor *editor, Action action)
     editor->cursor = buffer_remove(editor->buffer, editor->cursor);
   }
   if (action == Command::INPUT_TEXT) {
-      editor->cursor = buffer_insert(editor->buffer, editor->cursor, action.character);
-      editor->want_column = editor->cursor.column;
+    editor->cursor      = buffer_insert(editor->buffer, editor->cursor, action.character);
+    editor->want_column = editor->cursor.column;
   }
-
-  // TODO: move to parent container
-  // if (input->mouse_button_up_events[(i32)MouseButton::LEFT]) {
-  // f32 top_line_of_editor = editor->scroll;
-  // f32 space_width        = dl->font.glyphs_zero[' '].advance.x;
-  // i64 clicked_line       = top_line_of_editor +
-  //                    (input->mouse_pos.y + editor->font.descent) / editor->font.height;
-  // i64 clicked_column  = input->mouse_pos.x / space_width;
-  // editor->cursor      = find_position(editor->buffer, clicked_line, clicked_column);
-  // editor->want_column = editor->cursor.column;
-
-  // error("QWER ", input->mouse_pos.y, ", ", clicked_line, ", ", editor->font.size);
-  // }
-
-  // TODO: move to parent container
-  // editor->scroll -= input->scrollwheel_count;
-  // editor->scroll = fminf(editor->scroll, count_lines(editor->buffer) - 2);
-  // editor->scroll = fmaxf(editor->scroll, 0.f);
 }
 
-// // TODO: move to parent container
-// void draw_editor(Editor editor, Gpu::Device *gpu, Draw::List *dl)
-// {
-//   BasicBuffer *buffer = editor.buffer;
-//   Font &font          = dl->font;
+struct ViewRange {
+  i64 top_line;
+  i64 num_lines;
+  i64 last_line;
+  i64 num_columns;
+  Vec2f text_offset;
+};
+void draw_editor(Editor &editor, Draw::List *dl, Rect4f target_rect, ViewRange view_range,
+                 bool focused)
+{
+  BasicBuffer *buffer = editor.buffer;
+  Font &font          = dl->font;
+  f32 space_width     = font.glyphs_zero[' '].advance.x;
 
-//   f32 space_width = font.glyphs_zero[' '].advance.x;
+  Vec2f pos        = {
+      target_rect.x + view_range.text_offset.x * space_width,
+      target_rect.y + view_range.text_offset.y * font.height,
+  };
+  i64 idx  = find_position(buffer, view_range.top_line, 0).idx;
+  i64 line = view_range.top_line;
+  while (line <= view_range.last_line) {
 
-//   i64 top_line_of_editor  = editor.scroll;
-//   i64 num_lines_in_view   = editor.size.x / font.height;
-//   i64 num_columns_in_view = editor.size.x / space_width + 1;
+    Color cursor_color = focused ? settings.activated_color : settings.deactivated_color;
+    if (idx == editor.anchor.idx) {
+      Rect4f fill_rect   = {pos.x, pos.y - font.descent, space_width, font.height};
+      Rect4f border_rect = inset(fill_rect, -2.f);
+      Draw::push_rounded_rect(dl, 0, border_rect, 3, cursor_color);
+      Draw::push_rounded_rect(dl, 0, fill_rect, 3, Color(40, 44, 52));
+    }
+    if (idx == editor.cursor.idx) {
+      Rect4f cursor_rect = {pos.x, pos.y - font.descent, space_width, font.height};
+      Draw::push_rounded_rect(dl, 0, cursor_rect, 1, cursor_color);
+    }
 
-//   u32 tex_idx = Draw::push_texture(dl, dl->font_texture);
-//   Vec2f pos   = {0, -(fmod(editor.scroll, 1.f) * font.height)};
-//   for (i64 i    = find_position(&buffer, top_line_of_editor, 0).idx,
-//            line = top_line_of_editor;
-//        i < buffer->size && line < top_line_of_editor + num_lines_in_view; i++) {
-//     if (i == editor.anchor.idx) {
-//       Rect4f fill_rect   = {pos.x, pos.y - font.descent, space_width, font.height};
-//       Rect4f border_rect = inset(fill_rect, -1.5f);
-//       Draw::push_rounded_rect(dl, 0, border_rect, 3, {1.f, 1.f, 1.f, 1.f});
-//       Draw::push_rounded_rect(dl, 0, fill_rect, 3, Color(40, 44, 52));
-//     }
-//     if (i == editor.cursor.idx) {
-//       Rect4f cursor_rect = {pos.x, pos.y - font.descent, space_width, font.height};
-//       Draw::push_rounded_rect(dl, 0, cursor_rect, 1, {67, 158, 254});
-//     }
+    if (idx >= buffer->size) {
+      break;
+    }
 
-//     u8 c = buffer->data[i];
+    u8 c = buffer->data[idx];
+    if (c == '\n') {
+      pos.y += font.height;
+      pos.x = target_rect.x;
+      line++;
+    } else if (c == '\t') {
+      pos.x += 2 * space_width;
+    } else if (c == ' ') {
+      pos.x += space_width;
+    } else {
+      if ((i32)c >= font.glyphs_zero.size) {
+        c = 0;
+      }
+      Color color = (idx == editor.cursor.idx) ? Color(34, 36, 43) : settings.text_color;
+      pos         = Draw::draw_char(dl, dl->font, color, c, pos);
+    }
 
-//     if (c == '\n') {
-//       pos.y += font.height;
-//       pos.x = 0;
-//       line++;
-//       continue;
-//     } else if (c == '\t') {
-//       pos.x += 2 * space_width;
-//       continue;
-//     } else if (c == ' ') {
-//       pos.x += space_width;
-//       continue;
-//     }
+    idx++;
+  }
+}
 
-//     Glyph glyph = font.glyphs_zero[c];
-
-//     Rect4f shape_rect = {pos.x + glyph.bearing.x, pos.y + font.height -
-//     glyph.bearing.y,
-//                          glyph.size.x, glyph.size.y};
-
-//     Vec4f uv_bounds = {font.glyphs_zero[c].uv.x, font.glyphs_zero[c].uv.y,
-//                        font.glyphs_zero[c].uv.x + font.glyphs_zero[c].uv.width,
-//                        font.glyphs_zero[c].uv.y + font.glyphs_zero[c].uv.height};
-
-//     Color color = (i == editor.cursor.idx) ? Color(34, 36, 43) : Color(187, 194, 207);
-//     push_bitmap_glyph(dl, 0, shape_rect, uv_bounds, color, 0);
-
-//     pos.x += glyph.advance.x;
-//   }
-
-//   if (editor.anchor.idx == buffer->size) {
-//     Rect4f fill_rect   = {pos.x, pos.y - font.descent, space_width, font.height};
-//     Rect4f border_rect = inset(fill_rect, -1.5f);
-//     Draw::push_rounded_rect(dl, 0, border_rect, 3, {1.f, 1.f, 1.f, 1.f});
-//     Draw::push_rounded_rect(dl, 0, fill_rect, 3, Color(40, 44, 52));
-//   }
-//   if (editor.cursor.idx == buffer->size) {
-//     Rect4f cursor_rect = {pos.x, pos.y - font.descent, space_width, font.height};
-//     Draw::push_rounded_rect(dl, 0, cursor_rect, 1, {67, 158, 254});
-//   }
-// }
+void clear_and_reset(Editor *editor)
+{
+  editor->buffer->size = 0;
+  editor->cursor       = FILE_START;
+  editor->anchor       = FILE_START;
+}
 }  // namespace Five

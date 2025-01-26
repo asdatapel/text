@@ -2,8 +2,11 @@
 
 #include "actions.hpp"
 #include "draw.hpp"
+#include "string.hpp"
 
-void draw_status_bar(Draw::List *dl, Mode mode)
+Chord history;
+
+void draw_status_bar(Draw::List *dl, Chord *chord, Mode mode)
 {
   Font &font = dl->font;
 
@@ -17,20 +20,29 @@ void draw_status_bar(Draw::List *dl, Mode mode)
   Draw::push_rect(dl, 0, rect, {25, 27, 32});
 
   String text = mode == Mode::NORMAL ? "*NORMAL*" : "*INSERT*";
-  Vec2f pos   = {3.f, rect.y + 3.f};
+  Vec2f pos   = {12.f, rect.y };
+  Color color = Color(187, 194, 207);
   for (i32 i = 0; i < text.size; i++) {
-    u8 c        = text[i];
-    Glyph glyph = font.glyphs_zero[c];
+    pos = draw_char(dl, dl->font, color, text[i], pos);
+  }
 
-    Rect4f shape_rect = {pos.x + glyph.bearing.x, pos.y + font.height - glyph.bearing.y,
-                         glyph.size.x, glyph.size.y};
+  if (chord->size > 0) {
+    history = *chord;
+  }
+  for (i32 i = 0; i < history.size; i++) {
+    pos = draw_char(dl, dl->font, color, ' ', pos);
 
-    Vec4f uv_bounds = {font.glyphs_zero[c].uv.x, font.glyphs_zero[c].uv.y,
-                       font.glyphs_zero[c].uv.x + font.glyphs_zero[c].uv.width,
-                       font.glyphs_zero[c].uv.y + font.glyphs_zero[c].uv.height};
+    if ((history)[i].modifiers.super()) {
+      draw_string(dl, dl->font, color, "S-", pos);
+    }
+    if ((history)[i].modifiers.ctrl()) {
+      draw_string(dl, dl->font, color, "C-", pos);
+    }
+    if ((history)[i].modifiers.alt()) {
+      draw_string(dl, dl->font, color, "M-", pos);
+    }
 
-    Color color = Color(187, 194, 207);
-    push_bitmap_glyph(dl, 0, shape_rect, uv_bounds, color, 0);
-    pos.x += glyph.advance.x;
+    String key_string = KEY_STRINGS[(i32)(history)[i].key];
+    pos = draw_string(dl, dl->font, color, key_string, pos);
   }
 }
