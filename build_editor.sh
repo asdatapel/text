@@ -8,7 +8,7 @@ xcrun -sdk macosx metallib \
 
 # ./dui/build.sh
 clang++ \
-  -g -std=c++17 -fno-exceptions \
+  -std=c++17 -fno-exceptions \
   -framework Foundation -framework Metal -framework Quartzcore -framework IOKit -framework Cocoa -framework OpenGL \
   src/editor_main.cpp \
   -o ./build/editor.exe \
@@ -19,3 +19,6 @@ clang++ \
   -I ./third_party/freetype/include ./third_party/freetype/build/libfreetype.a \
   # -I "C:\Users\Asad\VulkanSdk\1.3.231.1\Include" "C:\Users\Asad\VulkanSdk\1.3.231.1\Lib\vulkan-1.lib"  \
   # -I ./third_party/assimp/include   ./third_party/assimp/lib/assimp-vc141-mt.lib \
+
+  # -g \
+  -O3 -Wall -DNDEBUG \

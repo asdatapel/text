@@ -1,5 +1,6 @@
 #include "actions.hpp"
 #include "buffer.hpp"
+#include "debug_window.hpp"
 #include "draw.hpp"
 #include "gpu/gpu.hpp"
 #include "gpu/metal/device.hpp"
@@ -9,6 +10,7 @@
 #include "menu.hpp"
 #include "platform.hpp"
 #include "status_bar.hpp"
+#include "tester.hpp"
 #include "types.hpp"
 #include "window.hpp"
 
@@ -20,7 +22,7 @@ struct WindowManager {
   Menu menu;
 
   i32 focused = 0;
-  Mode mode   = Mode::NORMAL;
+  Mode mode   = Mode::INSERT;
 
   Mode get_focused_mode()
   {
@@ -57,7 +59,6 @@ struct WindowManager {
       }
     }
 
-
     if (action == Command::WINDOW_SWITCH_LEFT) {
       focused = std::max(focused - 1, 0);
     }
@@ -74,9 +75,6 @@ struct WindowManager {
       }
     }
 
-    if (!(action == Command::MOUSE_SCROLL)) {
-      error("Action: ", (i32)action.command);
-    }
     ::Five::handle_action(&windows[focused], action, dl);
     return;
   }
@@ -86,6 +84,9 @@ struct WindowManager {
 
 int mymain()
 {
+  test_rope();
+  rope_buffer_tests();
+
   Input input;
   Chord chord;
   Actions actions;
@@ -113,18 +114,30 @@ int mymain()
   Gpu::RenderTarget target =
       Gpu::create_render_target(device, target_tex, std::nullopt, Color(34, 36, 43, 1));
 
+  RopeBuffer *buffer = buffer_manager.get_or_open_buffer("test.txt");
+  open_editor(&window_manager.windows[0], buffer);
+  Tester tester = create_tester("resources/test/big.txt");
+
   i32 capture = 0;
   while (!sys_window.should_close()) {
     Platform::fill_input(&sys_window, &input);
     process_input(&input, &actions, &chord, window_manager.get_focused_mode());
+    add_actions(&tester, window_manager.windows[0].active_editor, &actions);
 
-    for (i32 i = 0; i < actions.size; i++) {
-      if (actions[i] == Command::MENU_QUICK_OPEN) {
-        window_manager.menu.open = true;
-        continue;
+    i32 asd = 0;
+    while (actions.size > 0 && asd < 100000) {
+      for (i32 i = 0; i < actions.size; i++) {
+        if (actions[i] == Command::MENU_QUICK_OPEN) {
+          window_manager.menu.open = true;
+          continue;
+        }
+
+        window_manager.handle_action(actions[i], &dl);
       }
 
-      window_manager.handle_action(actions[i], &dl);
+      actions.clear();
+      add_actions(&tester, window_manager.windows[0].active_editor, &actions);
+      asd++;
     }
 
     if (capture == 0) {
@@ -140,6 +153,14 @@ int mymain()
       bool is_focused = window_manager.focused == i;
       draw_window(window_manager.windows[i], &dl, is_focused);
       draw_status_bar(&dl, &chord, window_manager.get_focused_mode());
+    }
+
+    if (window_manager.windows[0].active_editor) {
+      static DebugWindow debug_window =
+          init_debug_window(&window_manager.windows[0].active_editor->buffer);
+      debug_window.scroll += input.scrollwheel_count;
+      debug_window.mouse_position = input.mouse_pos;
+      draw(&debug_window, &dl, window_manager.windows[1].content_rect);
     }
 
     if (window_manager.menu.open) {

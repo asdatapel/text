@@ -9,6 +9,7 @@
 #include "gpu/metal/texture.hpp"
 #include "input.hpp"
 #include "platform.hpp"
+#include "containers/rope.hpp"
 #include "settings.hpp"
 
 namespace Five
@@ -30,8 +31,8 @@ void handle_action(Editor *editor, Action action)
     editor->anchor = editor->cursor;
   }
   if (action == Command::BUFFER_COPY) {
-    i64 start = std::min(editor->cursor.idx - 1, editor->anchor.idx);
-    i64 end   = std::max(editor->cursor.idx - 1, editor->anchor.idx);
+    i64 start = std::min(editor->cursor.index - 1, editor->anchor.index);
+    i64 end   = std::max(editor->cursor.index - 1, editor->anchor.index);
 
     String copy_str;
     copy_str.data = editor->buffer->data + start;
@@ -63,8 +64,8 @@ void handle_action(Editor *editor, Action action)
   }
   if (action == Command::NAV_WORD_LEFT) {
     bool seen_word = false;
-    while (editor->cursor.idx > 0) {
-      if (!std::isspace(editor->buffer->data[editor->cursor.idx - 1])) {
+    while (editor->cursor.index > 0) {
+      if (!std::isspace(editor->buffer->data[editor->cursor.index - 1])) {
         seen_word = true;
       } else if (seen_word) {
         break;
@@ -75,8 +76,8 @@ void handle_action(Editor *editor, Action action)
   }
   if (action == Command::NAV_WORD_RIGHT) {
     bool seen_word = false;
-    while (editor->cursor.idx < editor->buffer->size) {
-      if (!std::isspace(editor->buffer->data[editor->cursor.idx])) {
+    while (editor->cursor.index < editor->buffer->size) {
+      if (!std::isspace(editor->buffer->data[editor->cursor.index])) {
         seen_word = true;
       } else if (seen_word) {
         break;
@@ -137,18 +138,18 @@ void draw_editor(Editor &editor, Draw::List *dl, Rect4f target_rect, ViewRange v
       target_rect.x + view_range.text_offset.x * space_width,
       target_rect.y + view_range.text_offset.y * font.height,
   };
-  i64 idx  = find_position(buffer, view_range.top_line, 0).idx;
+  i64 idx  = find_position(buffer, view_range.top_line, 0).index;
   i64 line = view_range.top_line;
   while (line <= view_range.last_line) {
 
     Color cursor_color = focused ? settings.activated_color : settings.deactivated_color;
-    if (idx == editor.anchor.idx) {
+    if (idx == editor.anchor.index) {
       Rect4f fill_rect   = {pos.x, pos.y - font.descent, space_width, font.height};
       Rect4f border_rect = inset(fill_rect, -2.f);
       Draw::push_rounded_rect(dl, 0, border_rect, 3, cursor_color);
       Draw::push_rounded_rect(dl, 0, fill_rect, 3, Color(40, 44, 52));
     }
-    if (idx == editor.cursor.idx) {
+    if (idx == editor.cursor.index) {
       Rect4f cursor_rect = {pos.x, pos.y - font.descent, space_width, font.height};
       Draw::push_rounded_rect(dl, 0, cursor_rect, 1, cursor_color);
     }
@@ -170,7 +171,7 @@ void draw_editor(Editor &editor, Draw::List *dl, Rect4f target_rect, ViewRange v
       if ((i32)c >= font.glyphs_zero.size) {
         c = 0;
       }
-      Color color = (idx == editor.cursor.idx) ? Color(34, 36, 43) : settings.text_color;
+      Color color = (idx == editor.cursor.index) ? Color(34, 36, 43) : settings.text_color;
       pos         = Draw::draw_char(dl, dl->font, color, c, pos);
     }
 

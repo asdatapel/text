@@ -55,7 +55,7 @@ struct Action {
 
   u32 character;
   Vec2f mouse_position;
-  f32 scrollwheel_delta;
+  f64 scrollwheel_delta;
 
   Action() {}
   Action(Command command) { this->command = command; }
@@ -67,7 +67,7 @@ struct Action {
 
   bool operator==(Command command) { return this->command == command; }
 };
-typedef Array<Action, 128> Actions;
+typedef Array<Action, 10240> Actions;
 
 typedef Array<KeyInput, 8> Chord;
 Array<std::pair<Chord, Command>, 1024> bindings = {
@@ -137,46 +137,45 @@ void process_input(Input *input, Actions *actions, Chord *chord, Mode mode)
 
   if (input->mouse_button_up_events[(i32)MouseButton::LEFT]) {
     Action action;
-    action.command = Command::MOUSE_LEFT_CLICK;
+    action.command        = Command::MOUSE_LEFT_CLICK;
     action.mouse_position = input->mouse_pos;
     actions->push_back(action);
   }
   if (input->mouse_button_up_events[(i32)MouseButton::RIGHT]) {
     Action action;
-    action.command = Command::MOUSE_RIGHT_CLICK;
+    action.command        = Command::MOUSE_RIGHT_CLICK;
     action.mouse_position = input->mouse_pos;
     actions->push_back(action);
   }
   {
     Action action;
-    action.command = Command::MOUSE_SCROLL;
-    action.mouse_position = input->mouse_pos;
+    action.command           = Command::MOUSE_SCROLL;
+    action.mouse_position    = input->mouse_pos;
     action.scrollwheel_delta = input->scrollwheel_count;
     actions->push_back(action);
   }
 
   for (i32 i = 0; i < input->key_inputs.size; i++) {
     KeyInput key = input->key_inputs[i];
-    if (key.text_key && 
-        mode == Mode::INSERT &&
-        key.modifiers == Modifiers{} &&
+    if (key.text_key && mode == Mode::INSERT && key.modifiers == Modifiers{} &&
         chord->size == 0) {
       break;
     }
 
     chord->push_back(key);
-  }
 
-  bool any_partial_matches = false;
-  if (chord->size > 0) {
-    for (i32 i = 0; i < bindings.size; i++) {
-      if (match_chord(chord, &bindings[i].first, &any_partial_matches)) {
-        actions->push_back(bindings[i].second);
+    bool any_partial_matches = false;
+    if (chord->size > 0) {
+      for (i32 i = 0; i < bindings.size; i++) {
+        if (match_chord(chord, &bindings[i].first, &any_partial_matches)) {
+          actions->push_back(bindings[i].second);
+          chord->clear();
+        }
       }
-    }
 
-    if (!any_partial_matches) {
-      chord->clear();
+      if (!any_partial_matches) {
+        chord->clear();
+      }
     }
   }
 }

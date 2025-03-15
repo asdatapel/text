@@ -48,6 +48,15 @@ struct String {
     return true;
   }
 
+  bool starts_with(const String& prefix) {
+    if (prefix.size > size) return false;
+  
+    for (i32 i = 0; i < prefix.size; i++) {
+      if (data[i] != prefix.data[i]) return false;
+    }
+    return true;
+  }
+
   u64 to_u64()
   {
     u64 val = 0;
@@ -91,15 +100,15 @@ struct NullTerminatedString : String {
   }
 };
 
-template <u64 CAPACITY>
+template <i64 CAPACITY>
 struct StaticString {
-  static const u64 MAX_SIZE = CAPACITY;
+  inline static const i64 MAX_SIZE = CAPACITY;
   u8 data[CAPACITY + 1];
-  u64 size = 0;
+  i64 size = 0;
 
   StaticString() { data[0] = '\0'; }
 
-  template <u64 CAPACITY_2>
+  template <i64 CAPACITY_2>
   StaticString(StaticString<CAPACITY_2> &str2)
   {
     size = fmin(str2.size, MAX_SIZE);
@@ -123,7 +132,7 @@ struct StaticString {
     data[size] = '\0';
   }
 
-  template <u64 CAPACITY_2>
+  template <i64 CAPACITY_2>
   void operator=(const StaticString<CAPACITY_2> &str2)
   {
     size = fmin(str2.size, MAX_SIZE);

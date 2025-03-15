@@ -10,13 +10,14 @@
 struct TextPoint {
   i64 line   = 0;
   i64 column = 0;
-  i64 idx    = 0;
+  i64 index  = 0;
 
   bool operator!=(const TextPoint &other)
   {
-    return line != other.line || column != other.column || idx != other.idx;
+    return line != other.line || column != other.column || index != other.index;
   }
 };
+
 const TextPoint FILE_START = {0, 0, 0};
 
 struct BasicBuffer {
@@ -34,8 +35,8 @@ void validate_idx(BasicBuffer *buffer, i64 idx)
 #define VALIDATE_IDX(idx) validate_idx(buffer, idx)
 void debug_validate_text_point(BasicBuffer *buffer, TextPoint point)
 {
-  assert(point.idx >= 0);
-  assert(point.idx <= buffer->size);
+  assert(point.index >= 0);
+  assert(point.index <= buffer->size);
 }
 #define VALIDATE_POINT(point) debug_validate_text_point(buffer, point)
 
@@ -125,12 +126,12 @@ TextPoint find_position(BasicBuffer *buffer, i64 line, i64 column)
   if (line < 0) return FILE_START;
 
   TextPoint point;
-  while (point.idx < buffer->size) {
+  while (point.index < buffer->size) {
     if (point.line == line && point.column == column) {
       break;
     }
 
-    if (buffer->data[point.idx] == '\n') {
+    if (buffer->data[point.index] == '\n') {
       if (point.line == line) {
         break;
       }
@@ -141,7 +142,7 @@ TextPoint find_position(BasicBuffer *buffer, i64 line, i64 column)
       point.column++;
     }
 
-    point.idx++;
+    point.index++;
   }
 
   return point;
@@ -152,7 +153,7 @@ TextPoint buffer_insert(BasicBuffer *buffer, TextPoint point, u8 character)
   VALIDATE_POINT(point);
 
   TextPoint new_point = point;
-  new_point.idx++;
+  new_point.index++;
   new_point.column++;
   if (character == '\n') {
     new_point.column = 0;
@@ -163,9 +164,9 @@ TextPoint buffer_insert(BasicBuffer *buffer, TextPoint point, u8 character)
     buffer->capacity += 128;
     buffer->data = (u8 *)realloc(buffer->data, buffer->capacity);
   }
-  memcpy(buffer->data + point.idx + 1, buffer->data + point.idx,
-         buffer->size - point.idx);
-  buffer->data[point.idx] = character;
+  memcpy(buffer->data + point.index + 1, buffer->data + point.index,
+         buffer->size - point.index);
+  buffer->data[point.index] = character;
   buffer->size++;
 
   return new_point;
@@ -174,20 +175,20 @@ TextPoint buffer_insert(BasicBuffer *buffer, TextPoint point, u8 character)
 TextPoint buffer_remove(BasicBuffer *buffer, TextPoint point)
 {
   VALIDATE_POINT(point);
-  if (point.idx == 0) {
+  if (point.index == 0) {
     return point;
   }
 
   TextPoint new_point = point;
-  new_point.idx--;
+  new_point.index--;
   new_point.column--;
-  if (buffer->data[point.idx] == '\n') {
-    new_point.column = count_column(buffer, point.idx - 1);
+  if (buffer->data[point.index] == '\n') {
+    new_point.column = count_column(buffer, point.index - 1);
     new_point.line--;
   }
 
-  memcpy(buffer->data + point.idx - 1, buffer->data + point.idx,
-         buffer->size - point.idx);
+  memcpy(buffer->data + point.index - 1, buffer->data + point.index,
+         buffer->size - point.index);
   buffer->size--;
 
   return new_point;
@@ -197,18 +198,18 @@ TextPoint shift_point_forward(BasicBuffer *buffer, TextPoint point)
 {
   VALIDATE_POINT(point);
 
-  i64 next_idx = point.idx + 1;
+  i64 next_idx = point.index + 1;
   if (next_idx > buffer->size) {
     return point;
   }
 
   point.column++;
-  if (buffer->data[point.idx] == '\n') {
+  if (buffer->data[point.index] == '\n') {
     point.column = 0;
     point.line++;
   }
 
-  point.idx = next_idx;
+  point.index = next_idx;
 
   return point;
 }
@@ -217,7 +218,7 @@ TextPoint shift_point_backward(BasicBuffer *buffer, TextPoint point)
 {
   VALIDATE_POINT(point);
 
-  i64 next_idx = point.idx - 1;
+  i64 next_idx = point.index - 1;
   if (next_idx < 0) {
     return point;
   }
@@ -228,7 +229,7 @@ TextPoint shift_point_backward(BasicBuffer *buffer, TextPoint point)
     point.line--;
   }
 
-  point.idx = next_idx;
+  point.index = next_idx;
 
   return point;
 }
@@ -237,16 +238,16 @@ String get_line_contents(BasicBuffer *buffer, i64 line) {
   assert(line >= 0);
 
   TextPoint point = FILE_START;
-  while (point.idx < buffer->size && point.line < line) {
-    if (buffer->data[point.idx] == '\n') {
+  while (point.index < buffer->size && point.line < line) {
+    if (buffer->data[point.index] == '\n') {
       point.line++;
     }
-    point.idx++;
+    point.index++;
   }
 
-  String contents = {&buffer->data[point.idx], 0};
-  while (point.idx < buffer->size && buffer->data[point.idx] != '\n') {
-    point.idx++;
+  String contents = {&buffer->data[point.index], 0};
+  while (point.index < buffer->size && buffer->data[point.index] != '\n') {
+    point.index++;
     contents.size++;
   }
   return contents;

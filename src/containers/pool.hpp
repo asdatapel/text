@@ -8,34 +8,34 @@ struct Pool {
   struct Element {
     union {
       T value = {};
-      i32 next;
+      i64 next;
     };
   };
 
   Element *data      = nullptr;
-  i32 next_available = -1;
-  i32 capacity       = 0;
+  i64 next_available = -1;
+  i64 capacity       = 0;
 
   Pool() { init(32); }
-  Pool(i32 capacity) { init(capacity); }
+  Pool(i64 capacity) { init(capacity); }
 
-  void init(i32 capacity) { resize(capacity); }
+  void init(i64 capacity) { resize(capacity); }
 
-  void resize(i32 new_capacity)
+  void resize(i64 new_capacity)
   {
     if (!data) {
       data = (Element *)sys_alloc(new_capacity * sizeof(Element));
     } else {
-      sys_realloc(data, new_capacity * sizeof(Element));
+      data = (Element *)sys_realloc(data, new_capacity * sizeof(Element));
     }
 
-    i32 *next_available = &this->next_available;
+    i64 *next_available = &this->next_available;
     while (*next_available != -1) {
       next_available = &data[*next_available].next;
     }
     *next_available = capacity;
 
-    for (i32 i = capacity; i < new_capacity - 1; i++) {
+    for (i64 i = capacity; i < new_capacity - 1; i++) {
       data[i].next = i + 1;
     }
     data[new_capacity - 1].next = -1;
@@ -43,33 +43,44 @@ struct Pool {
     capacity = new_capacity;
   }
 
-  T &operator[](i32 i)
+  T &operator[](i64 i)
   {
+    assert(i > -1);
     assert(i < capacity);
     return data[i].value;
   }
+  T &wrapped_get(i64 i) { return data[i % capacity].value; }
 
-  T &wrapped_get(i32 i) { return data[i % capacity].value; }
-
-  i32 push_back(T value)
+  i64 push_back(T value)
   {
     if (next_available == -1) {
       resize(capacity * 2);
     };
 
-    i32 idx          = next_available;
+    i64 idx          = next_available;
     Element *current = &data[idx];
     next_available   = current->next;
     current->value   = value;
     return idx;
   }
 
-  void remove(i32 i)
+  void remove(i64 i)
   {
     Element *element = &data[i];
     element->next    = next_available;
     next_available   = i;
   }
 
-  i32 index_of(T *ptr) { return ((Element *)ptr - data); }
+  i64 index_of(T *ptr) { return ((Element *)ptr - data); }
+
+  i64 count_free()
+  {
+    i64 count = 0;
+    i64 next  = next_available;
+    while (next != -1) {
+      count++;
+      next = data[next].next;
+    }
+    return count;
+  }
 };

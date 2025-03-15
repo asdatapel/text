@@ -128,11 +128,11 @@ i32 fuzzy_score(String query, String text)
   return score - text.size;  // prefer shorter filenames
 }
 
-void sort(DynamicArray<std::pair<i32, i32>> arr)
+void sort(DynamicArray<std::pair<i64, i64>> arr)
 {
-  i32 looking_for = 0;
-  for (i32 i = arr.size - 1; i >= 0; i--) {
-    for (i32 j = i; j >= 0; j--) {
+  i64 looking_for = 0;
+  for (i64 i = arr.size - 1; i >= 0; i--) {
+    for (i64 j = i; j >= 0; j--) {
       if (arr[j].second == looking_for) {
         auto a = arr[i];
         arr[i] = arr[j];
@@ -147,18 +147,18 @@ void sort(DynamicArray<std::pair<i32, i32>> arr)
   }
 }
 
-void merge_sort(DynamicArray<std::pair<i32, i32>> src,
-                DynamicArray<std::pair<i32, i32>> dst, i32 start, i32 end)
+void merge_sort(DynamicArray<std::pair<i64, i64>> src,
+                DynamicArray<std::pair<i64, i64>> dst, i64 start, i64 end)
 {
   if (end - start <= 1) return;
 
-  i32 middle = (start + end) / 2;
+  i64 middle = (start + end) / 2;
   merge_sort(dst, src, start, middle);
   merge_sort(dst, src, middle, end);
 
-  i32 left_cursor  = start;
-  i32 right_cursor = middle;
-  for (i32 i = start; i < end; i++) {
+  i64 left_cursor  = start;
+  i64 right_cursor = middle;
+  for (i64 i = start; i < end; i++) {
     if (i < middle && src[left_cursor].second >= src[right_cursor].second ||
         right_cursor >= end) {
       dst[i] = src[left_cursor];
@@ -181,10 +181,10 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
 
   menu->alloc.reset();
   DynamicArray<String> files = Platform::list_files(".", &menu->alloc);
-  DynamicArray<std::pair<i32, i32>> scores(&menu->alloc);
-  DynamicArray<std::pair<i32, i32>> sorted(&menu->alloc);
+  DynamicArray<std::pair<i64, i64>> scores(&menu->alloc);
+  DynamicArray<std::pair<i64, i64>> sorted(&menu->alloc);
   scores.set_capacity(files.size);
-  for (i32 i = 0; i < files.size; i++) {
+  for (i64 i = 0; i < files.size; i++) {
     i32 score = fuzzy_score({menu->buffer.data, menu->buffer.size}, files[i]);
     if (score > 0) {
       scores.push_back({i, score});
@@ -195,7 +195,7 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
 
   Font &font = dl->font;
 
-  i32 line_count  = std::min(files.size, 32) + 1;
+  i32 line_count  = std::min((i32)files.size, 32) + 1;
   f32 line_height = font.height;
   f32 margin      = 3;
 
@@ -214,7 +214,7 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
     draw_string(dl, dl->font, {187, 194, 207}, text, pos);
   }
 
-  for (i32 i = 1; i < line_count && i < sorted.size; i++) {
+  for (i64 i = 1; i < line_count && i < sorted.size; i++) {
     String text = files[sorted[i - 1].first];
 
     if (i - 1 == menu->selected) {
@@ -245,8 +245,8 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
     menu->entered = false;
 
     if (files.size > 0 && sorted.size > 0) {
-      String filename              = files[sorted[menu->selected].first];
-      BasicBuffer *buffer          = buffer_manager.get_or_open_buffer(filename);
+      String filename              = files[(i64)sorted[(i64)menu->selected].first];
+      RopeBuffer *buffer          = buffer_manager.get_or_open_buffer(filename);
 
       open_editor(active_window, buffer);
     }
