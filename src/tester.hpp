@@ -77,7 +77,7 @@ void add_actions(Tester *tester, Five::RopeEditor *editor, Actions *actions)
     RopeBuffer::Cursor target = cursor_at(editor->buffer, next_span.input_position);
     if (target.line() != editor->cursor.line()) {
       i64 distance = editor->cursor.line() - target.line();
-      while (actions->size < 1000 && distance > 0) {
+      while (actions->size < 10000 && distance > 0) {
         actions->push_back(Command::NAV_LINE_UP);
         distance--;
       }
@@ -92,19 +92,19 @@ void add_actions(Tester *tester, Five::RopeEditor *editor, Actions *actions)
     RopeBuffer::Cursor target = cursor_at(editor->buffer, next_span.input_position);
     if (target.line() != editor->cursor.line()) {
       i64 distance = target.line() - editor->cursor.line();
-      while (actions->size < 1000 && distance > 0) {
+      while (actions->size < 10000 && distance > 0) {
         actions->push_back(Command::NAV_LINE_DOWN);
         distance--;
       }
     } else {
       i64 distance = next_span.input_position - editor->cursor.index;
-      while (actions->size < 1000 && distance > 0) {
+      while (actions->size < 10000 && distance > 0) {
         actions->push_back(Command::NAV_CHAR_RIGHT);
         distance--;
       }
     }
   } else {
-    while (actions->size < 1000 && tester->current_span_idx < next_span.size) {
+    while (actions->size < 10000 && tester->current_span_idx < next_span.size) {
       actions->push_back(tester->file[next_span.start + tester->current_span_idx]);
       tester->current_span_idx++;
       next_span.input_position++;
