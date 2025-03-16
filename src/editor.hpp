@@ -4,12 +4,12 @@
 
 #include "actions.hpp"
 #include "buffer.hpp"
+#include "containers/rope.hpp"
 #include "draw.hpp"
 #include "font.hpp"
 #include "gpu/metal/texture.hpp"
 #include "input.hpp"
 #include "platform.hpp"
-#include "containers/rope.hpp"
 #include "settings.hpp"
 
 namespace Five
@@ -134,14 +134,13 @@ void draw_editor(Editor &editor, Draw::List *dl, Rect4f target_rect, ViewRange v
   Font &font          = dl->font;
   f32 space_width     = font.glyphs_zero[' '].advance.x;
 
-  Vec2f pos        = {
+  Vec2f pos = {
       target_rect.x + view_range.text_offset.x * space_width,
       target_rect.y + view_range.text_offset.y * font.height,
   };
   i64 idx  = find_position(buffer, view_range.top_line, 0).index;
   i64 line = view_range.top_line;
   while (line <= view_range.last_line) {
-
     Color cursor_color = focused ? settings.activated_color : settings.deactivated_color;
     if (idx == editor.anchor.index) {
       Rect4f fill_rect   = {pos.x, pos.y - font.descent, space_width, font.height};
@@ -171,8 +170,9 @@ void draw_editor(Editor &editor, Draw::List *dl, Rect4f target_rect, ViewRange v
       if ((i32)c >= font.glyphs_zero.size) {
         c = 0;
       }
-      Color color = (idx == editor.cursor.index) ? Color(34, 36, 43) : settings.text_color;
-      pos         = Draw::draw_char(dl, dl->font, color, c, pos);
+      Color color =
+          (idx == editor.cursor.index) ? Color(34, 36, 43) : settings.text_color;
+      pos = Draw::draw_char(dl, dl->font, color, c, pos);
     }
 
     idx++;

@@ -44,7 +44,7 @@ Tester create_tester(String filename)
   error("ASHBDGAYSFV ", unordered.size());
 
   while (unordered.size() > 0) {
-    i64 index = std::rand() % unordered.size();
+    i64 index = 0; //std::rand() % unordered.size();
     Span span = unordered[index];
     unordered.erase(unordered.begin() + index);
     for (i64 i = index; i < unordered.size(); i++) {
@@ -58,11 +58,8 @@ Tester create_tester(String filename)
 
 void add_actions(Tester *tester, Five::RopeEditor *editor, Actions *actions)
 {
+  const i32 actions_per_frame = 200;
   if (tester->spans.size() == 0) return;
-
-  if (tester->spans.size() == 1) {
-    error("ASDA");
-  }
 
   Span &next_span = tester->spans[0];
 
@@ -77,13 +74,13 @@ void add_actions(Tester *tester, Five::RopeEditor *editor, Actions *actions)
     RopeBuffer::Cursor target = cursor_at(editor->buffer, next_span.input_position);
     if (target.line() != editor->cursor.line()) {
       i64 distance = editor->cursor.line() - target.line();
-      while (actions->size < 10000 && distance > 0) {
+      while (actions->size < actions_per_frame && distance > 0) {
         actions->push_back(Command::NAV_LINE_UP);
         distance--;
       }
     } else {
       i64 distance = editor->cursor.index - next_span.input_position;
-      while (actions->size < 1000 && distance > 0) {
+      while (actions->size < actions_per_frame && distance > 0) {
         actions->push_back(Command::NAV_CHAR_LEFT);
         distance--;
       }
@@ -92,19 +89,19 @@ void add_actions(Tester *tester, Five::RopeEditor *editor, Actions *actions)
     RopeBuffer::Cursor target = cursor_at(editor->buffer, next_span.input_position);
     if (target.line() != editor->cursor.line()) {
       i64 distance = target.line() - editor->cursor.line();
-      while (actions->size < 10000 && distance > 0) {
+      while (actions->size < actions_per_frame && distance > 0) {
         actions->push_back(Command::NAV_LINE_DOWN);
         distance--;
       }
     } else {
       i64 distance = next_span.input_position - editor->cursor.index;
-      while (actions->size < 10000 && distance > 0) {
+      while (actions->size < actions_per_frame && distance > 0) {
         actions->push_back(Command::NAV_CHAR_RIGHT);
         distance--;
       }
     }
   } else {
-    while (actions->size < 10000 && tester->current_span_idx < next_span.size) {
+    while (actions->size < actions_per_frame && tester->current_span_idx < next_span.size) {
       actions->push_back(tester->file[next_span.start + tester->current_span_idx]);
       tester->current_span_idx++;
       next_span.input_position++;

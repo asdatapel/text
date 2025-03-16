@@ -17,8 +17,7 @@ clang++ \
   -I ./third_party/metal-cpp  ./src/gpu/metal/glfw_bridge.mm ./src/gpu/metal/metal_implementation.cpp \
   -I ./third_party/glfw/include ./third_party/glfw/build/src/libglfw3.a \
   -I ./third_party/freetype/include ./third_party/freetype/build/libfreetype.a \
+  -g \
+  # -O3 -DNDEBUG \
   # -I "C:\Users\Asad\VulkanSdk\1.3.231.1\Include" "C:\Users\Asad\VulkanSdk\1.3.231.1\Lib\vulkan-1.lib"  \
   # -I ./third_party/assimp/include   ./third_party/assimp/lib/assimp-vc141-mt.lib \
-
-  # -g \
-  -O3 -Wall -DNDEBUG \

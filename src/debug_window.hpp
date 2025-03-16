@@ -63,7 +63,7 @@ i64 draw(DebugWindow *window, Draw::List *dl, Node *node, i32 x, i32 y, Summary 
         {0, 0, 0, 255});
     i64 depthr = draw(window, dl, rope.get(node->children.right),
                       x + (width + gap) * (depthl), y + (width + gap),
-                      summarize(summary, rope.get(node->children.left)->summary));
+                      window->buffer->summarizer.summarize(summary, rope.get(node->children.left)->summary));
 
     if (in_rect(window->mouse_position, rect)) {
       Color white = {1.f, 1.f, 1.f, 1.f};
@@ -185,7 +185,7 @@ i64 draw(DebugWindow *window, Draw::List *dl, Node *node, i32 x, i32 y, Summary 
       cursor.x = text_x;
       cursor.y += dl->font.height;
 
-      String chunk = {node->data.data, node->data.size};
+      String chunk = {&(*window->buffer->text)[node->data.index], node->data.size};
       cursor       = Draw::draw_string(dl, dl->font, white, chunk, cursor);
     }
   }
@@ -236,6 +236,6 @@ void draw(DebugWindow *window, Draw::List *dl, Rect4f target_rect)
   cursor.x = text_x;
   cursor.y += dl->font.height;
 
-  // draw(window, dl, window->buffer->rope.get_or_empty(window->buffer->rope.root),
-  //      cursor.x, cursor.y, {});
+  draw(window, dl, window->buffer->rope.get_or_empty(window->buffer->rope.root),
+       cursor.x, cursor.y, {});
 }

@@ -24,15 +24,7 @@ void accumulate_eof(Summary *summary)
   summary->size++;
   summary->last_line_chars++;
 }
-Summary summarize(const Chunk &chunk)
-{
-  Summary summary;
-  for (i64 i = 0; i < chunk.size; i++) {
-    accumulate(&summary, chunk.data[i]);
-  }
-  return summary;
-}
-Summary summarize(const Summary &left, const Summary &right)
+Summary Summarizer::summarize(const Summary &left, const Summary &right)
 {
   Summary summary;
   summary.size     = left.size + right.size;
@@ -46,9 +38,17 @@ Summary summarize(const Summary &left, const Summary &right)
 
   return summary;
 }
-Summary summarize(const Chunk &right, i64 index)
+Summary Summarizer::summarize(const Chunk &chunk)
 {
-  Chunk partial_chunk = {right.data, index};
+  Summary summary;
+  for (i64 i = 0; i < chunk.size; i++) {
+    accumulate(&summary, (*data)[chunk.index + i]);
+  }
+  return summary;
+}
+Summary Summarizer::summarize(const Chunk &right, i64 index)
+{
+  Chunk partial_chunk = {right.index, index};
   return summarize(partial_chunk);
 }
 
@@ -74,79 +74,66 @@ struct RopeBuffer {
   };
 
   Rope rope;
-
   RopeBuffer::Iterator last_edit;
-  NodeRef editing_leaf = NodeRef::invalid();
+  DynamicArray<u8> *text;
+  Summarizer summarizer;
 
   std::optional<String> filename = std::nullopt;
 };
 
-void validate_idx(RopeBuffer buffer, i64 idx)
+void fill_rope(RopeBuffer *buffer, String contents)
 {
-  assert(idx >= 0);
-  assert(idx <= buffer.rope.get_summary_or_empty().size);
-}
-#define VALIDATE_IDX(idx) validate_idx(buffer, idx)
-void debug_validate_cursor(RopeBuffer buffer, RopeBuffer::Cursor cursor)
-{
-  assert(cursor.summary.size >= 0);
-  assert(cursor.summary.size <= buffer.rope.get_summary_or_empty().size);
-  assert(cursor.current.is_valid());
-  assert(cursor.node_index >= 0);
+  Rope rope = create_rope(buffer->summarizer);
+  buffer->text->resize(contents.size);
+  memcpy(buffer->text->data, contents.data, contents.size);
 
-  Node *current_val = buffer.rope.get(cursor.current);
-  assert(current_val->type == Node::Type::LEAF);
-  assert(cursor.node_index <= current_val->data.size);
+  i64 next_position = 0;
+  while (next_position < contents.size) {
+    Chunk chunk;
+    chunk.index  = next_position;
+    chunk.size   = std::min(contents.size - next_position, CHUNK_MAX_SIZE);
+    NodeRef leaf = new_leaf(rope, chunk);
+
+    if (!rope.root.is_valid()) {
+      rope.root = leaf;
+      rope      = commit_builder(rope);
+    } else {
+      Rope new_rope = insert_right(rope, leaf);
+      release(rope);
+      rope = new_rope;
+    }
+
+    next_position += chunk.size;
+  }
+
+  buffer->rope = rope;
 }
-#define VALIDATE_CURSOR(cursor) debug_validate_cursor(buffer, cursor)
 
 RopeBuffer create_rope_buffer()
 {
   RopeBuffer buffer;
+  buffer.text       = new DynamicArray<u8>(&system_allocator);
+  buffer.summarizer = Summarizer{buffer.text};
   return buffer;
 }
 
 RopeBuffer load_rope_buffer(std::optional<String> filename)
 {
-  RopeBuffer buffer;
+  RopeBuffer buffer = create_rope_buffer();
 
   if (filename) {
     buffer.filename = filename->copy(&system_allocator);
 
     File file;
     if (read_file(filename.value(), &tmp_allocator, &file)) {
-      buffer.rope = rope_of(file.data);
+      fill_rope(&buffer, file.data);
       return buffer;
     }
   }
 
-  buffer.rope = rope_of("");
+  fill_rope(&buffer, "");
   return buffer;
 }
-
-// RopeBuffer::Cursor to_cursor(RopeBuffer::Iterator it)
-// {
-//   if (!it.current) {
-//     return {};
-//   }
-//   assert(it.current->type == Node::Type::LEAF);
-
-//   Summary summary = summarize(it.current->data, it.node_index);
-
-//   Node *current = it.current;
-//   Node *parent  = it.current->parent;
-//   while (parent) {
-//     if (index_of_child(parent, current) == 1) {
-//       summary = summarize(parent->children[0]->summary, summary);
-//     }
-//     current = parent;
-//     parent  = current->parent;
-//   }
-
-//   RopeBuffer::Cursor cursor = it;
-//   cursor.summary            = summary;
-//   return cursor;
-// }
 
 i64 count_lines(RopeBuffer buffer)
 {
@@ -156,7 +143,7 @@ i64 count_lines(RopeBuffer buffer)
 u8 char_at(RopeBuffer buffer, RopeBuffer::Iterator it)
 {
   Node *current_val = buffer.rope.get(it.current);
-  return current_val->data.data[it.node_index];
+  return (*buffer.text)[current_val->data.index + it.node_index];
 }
 
 bool is_valid(RopeBuffer buffer, RopeBuffer::Iterator it)
@@ -176,7 +163,8 @@ RopeBuffer::Cursor cursor_at(RopeBuffer buffer, NodeRef root, i64 index,
 {
   Node *root_val = buffer.rope.get(root);
   if (root_val->type == Node::Type::LEAF) {
-    Summary summary = summarize(accumulator, summarize(root_val->data, index));
+    Summary summary = buffer.summarizer.summarize(
+        accumulator, buffer.summarizer.summarize(root_val->data, index));
 
     RopeBuffer::Cursor cursor;
     cursor.current    = root;
@@ -192,7 +180,7 @@ RopeBuffer::Cursor cursor_at(RopeBuffer buffer, NodeRef root, i64 index,
     return cursor_at(buffer, root_val->children.left, index, accumulator);
   }
   return cursor_at(buffer, root_val->children.right, index - left_size,
-                   summarize(accumulator, left->summary));
+                   buffer.summarizer.summarize(accumulator, left->summary));
 }
 RopeBuffer::Cursor cursor_at(RopeBuffer buffer, i64 index)
 {
@@ -221,7 +209,7 @@ RopeBuffer::Cursor cursor_at_point(RopeBuffer buffer, NodeRef root, i64 want_lin
         break;
       }
 
-      if (root_val->data.data[index] == '\n') {
+      if ((*buffer.text)[root_val->data.index + index] == '\n') {
         if (line == want_line) {
           break;
         }
@@ -233,7 +221,8 @@ RopeBuffer::Cursor cursor_at_point(RopeBuffer buffer, NodeRef root, i64 want_lin
       index++;
     }
 
-    Summary summary = summarize(accumulator, summarize(root_val->data, index));
+    Summary summary = buffer.summarizer.summarize(
+        accumulator, buffer.summarizer.summarize(root_val->data, index));
 
     RopeBuffer::Cursor cursor;
     cursor.current    = root;
@@ -247,7 +236,7 @@ RopeBuffer::Cursor cursor_at_point(RopeBuffer buffer, NodeRef root, i64 want_lin
   i64 left_lines   = left->summary.newlines;
   i64 left_columns = left->summary.last_line_chars;
   if (want_line == left_lines && want_column >= left_columns) {
-    accumulator = summarize(accumulator, left->summary);
+    accumulator = buffer.summarizer.summarize(accumulator, left->summary);
     return cursor_at_point(buffer, root_val->children.right, want_line - left_lines,
                            want_column - left_columns, accumulator);
   }
@@ -255,7 +244,7 @@ RopeBuffer::Cursor cursor_at_point(RopeBuffer buffer, NodeRef root, i64 want_lin
     return cursor_at_point(buffer, root_val->children.left, want_line, want_column,
                            accumulator);
   }
-  accumulator = summarize(accumulator, left->summary);
+  accumulator = buffer.summarizer.summarize(accumulator, left->summary);
   return cursor_at_point(buffer, root_val->children.right, want_line - left_lines,
                          want_column, accumulator);
 }
@@ -280,7 +269,8 @@ RopeBuffer::Cursor insert_position(RopeBuffer buffer, NodeRef root, i64 index,
 {
   Node *root_val = buffer.rope.get(root);
   if (root_val->type == Node::Type::LEAF) {
-    Summary summary = summarize(accumulator, summarize(root_val->data, index));
+    Summary summary = buffer.summarizer.summarize(
+        accumulator, buffer.summarizer.summarize(root_val->data, index));
 
     RopeBuffer::Cursor cursor;
     cursor.current    = root;
@@ -296,7 +286,7 @@ RopeBuffer::Cursor insert_position(RopeBuffer buffer, NodeRef root, i64 index,
     return insert_position(buffer, root_val->children.left, index, accumulator);
   }
   return insert_position(buffer, root_val->children.right, index - left_size,
-                         summarize(accumulator, left->summary));
+                         buffer.summarizer.summarize(accumulator, left->summary));
 }
 RopeBuffer::Cursor insert_position(RopeBuffer buffer, i64 index)
 {
@@ -436,24 +426,14 @@ void write_to_disk(RopeBuffer buffer)
 RopeBuffer::Cursor buffer_insert(RopeBuffer &buffer, RopeBuffer::Cursor cursor,
                                  u8 character)
 {
-  // if (!is_valid(cursor) && !is_eof(buffer, cursor)) {
-  //   return cursor;
-  // }
-
-  // if (!buffer.editing_leaf.is_valid() || cursor != buffer.last_edit ||
-  //     buffer.rope.get(buffer.editing_leaf)->data.size == CHUNK_MAX_SIZE) {
   NodeRef editing_leaf = insert_position(buffer, cursor.index).current;
   if (!editing_leaf.is_valid() || cursor != buffer.last_edit ||
       buffer.rope.get(editing_leaf)->data.size == CHUNK_MAX_SIZE ||
-      buffer.rope.get(editing_leaf)->data.data == nullptr) {
-    // String string;
-    // string.data    = system_allocator.alloc(CHUNK_MAX_SIZE).data;
-    // string.data[0] = character;
-    // string.size    = 1;
+      buffer.rope.get(editing_leaf)->data.index == 0) {
     Chunk new_chunk;
-    new_chunk.data    = system_allocator.alloc(CHUNK_MAX_SIZE).data;
-    new_chunk.data[0] = character;
-    new_chunk.size    = 1;
+    new_chunk.index = buffer.text->size;
+    new_chunk.size  = 1;
+    buffer.text->push_back(character);
 
     Rope split_left;
     Rope split_right;
@@ -469,14 +449,15 @@ RopeBuffer::Cursor buffer_insert(RopeBuffer &buffer, RopeBuffer::Cursor cursor,
     release(split_right);
 
     buffer.rope       = new_rope;
-    cursor.current    = buffer.editing_leaf;
+    cursor.current    = editing_leaf;
     cursor.node_index = 1;
   } else {
-    Node *leaf_val           = buffer.rope.get(editing_leaf);
-    Chunk *chunk             = &leaf_val->data;
-    chunk->data[chunk->size] = character;
+    buffer.text->push_back(character);
+
+    Node *leaf_val = buffer.rope.get(editing_leaf);
+    Chunk *chunk   = &leaf_val->data;
     chunk->size++;
-    leaf_val->summary = summarize(leaf_val->data);
+    leaf_val->summary = buffer.summarizer.summarize(leaf_val->data);
     restat_for_index(buffer.rope, cursor.index - (chunk->size - 1));
   }
 
@@ -498,10 +479,10 @@ RopeBuffer::Cursor buffer_remove(RopeBuffer &buffer, RopeBuffer::Cursor cursor)
   Rope new_rope = merge(splits[0], splits[3]);
   if (!new_rope.root.is_valid()) {
     Chunk new_chunk;
-    new_chunk.data = nullptr;
-    new_chunk.size = 0;
-    new_rope.root  = new_leaf(buffer.rope, new_chunk);
-    new_rope       = commit_builder(new_rope);
+    new_chunk.index = 0;
+    new_chunk.size  = 0;
+    new_rope.root   = new_leaf(buffer.rope, new_chunk);
+    new_rope        = commit_builder(new_rope);
   }
 
   release(buffer.rope);

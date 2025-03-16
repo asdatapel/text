@@ -126,6 +126,12 @@ void handle_action(RopeEditor *editor, Action action)
     }
   }
   if (action == Command::INPUT_BACKSPACE) {
+    String text_contents;
+    text_contents.data = editor->buffer.text->data;
+    text_contents.size = editor->buffer.text->size;
+    error("ASDASD");
+    error(text_contents);
+
     editor->cursor = buffer_remove(editor->buffer, editor->cursor);
   }
   if (action == Command::INPUT_TEXT) {

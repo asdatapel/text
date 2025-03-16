@@ -14,6 +14,8 @@
 #include "types.hpp"
 #include "window.hpp"
 
+constexpr bool ENABLE_METAL_CAPTURE = false;
+
 namespace Five
 {
 
@@ -116,33 +118,44 @@ int mymain()
 
   RopeBuffer *buffer = buffer_manager.get_or_open_buffer("test.txt");
   open_editor(&window_manager.windows[0], buffer);
-  Tester tester = create_tester("resources/test/big.txt");
+  Tester tester = create_tester("resources/test/tiny.txt");
 
-  i32 capture = 0;
+  i64 frame = 0;
   while (!sys_window.should_close()) {
     Platform::fill_input(&sys_window, &input);
     process_input(&input, &actions, &chord, window_manager.get_focused_mode());
     add_actions(&tester, window_manager.windows[0].active_editor, &actions);
 
-    i32 asd = 0;
-    while (actions.size > 0 && asd < 100000) {
-      for (i32 i = 0; i < actions.size; i++) {
-        if (actions[i] == Command::MENU_QUICK_OPEN) {
-          window_manager.menu.open = true;
-          continue;
-        }
+    // i32 asd = 0;
+    // while (actions.size > 0 && asd < 100000) {
+    //   for (i32 i = 0; i < actions.size; i++) {
+    //     if (actions[i] == Command::MENU_QUICK_OPEN) {
+    //       window_manager.menu.open = true;
+    //       continue;
+    //     }
 
-        window_manager.handle_action(actions[i], &dl);
+    //     window_manager.handle_action(actions[i], &dl);
+    //   }
+
+    //   actions.clear();
+    //   add_actions(&tester, window_manager.windows[0].active_editor, &actions);
+    //   asd++;
+    // }
+
+    for (i32 i = 0; i < actions.size; i++) {
+      if (actions[i] == Command::MENU_QUICK_OPEN) {
+        window_manager.menu.open = true;
+        continue;
       }
 
-      actions.clear();
-      add_actions(&tester, window_manager.windows[0].active_editor, &actions);
-      asd++;
+      window_manager.handle_action(actions[i], &dl);
     }
 
-    if (capture == 0) {
-      // MTL::CaptureManager::sharedCaptureManager()->startCapture(device->metal_device);
-    }
+    // if constexpr (ENABLE_METAL_CAPTURE) {
+    //   if (capture == 0) {
+    //     MTL::CaptureManager::sharedCaptureManager()->startCapture(device->metal_device);
+    //   }
+    // }
 
     Gpu::start_frame(device);
     Gpu::start_backbuffer(device, Color(40, 44, 52));
@@ -167,16 +180,18 @@ int mymain()
       Five::draw_filemenu(&window_manager.menu, &dl, window_manager.get_focused_window());
     }
 
-    Draw::end_frame(&dl, device, capture);
+    Draw::end_frame(&dl, device, frame);
 
     Gpu::end_backbuffer(device);
 
     Gpu::end_frame(device);
 
-    if (capture == 3) {
-      // MTL::CaptureManager::sharedCaptureManager()->stopCapture();
-    }
-    capture++;
+    // if constexpr (ENABLE_METAL_CAPTURE) {
+    //   if (capture == 3) {
+    //     MTL::CaptureManager::sharedCaptureManager()->stopCapture();
+    //   }
+    // }
+    frame++;
 
     tmp_allocator.reset();
   }

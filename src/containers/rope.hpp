@@ -5,7 +5,7 @@
 
 const i64 CHUNK_MAX_SIZE = 64;
 struct Chunk {
-  u8 *data;
+  i64 index;
   i64 size;
 };
 
@@ -15,11 +15,15 @@ struct Summary {
   i64 last_line_chars = 0;
 };
 
-void accumulate(Summary *summary, u8 c);
-void accumulate_eof(Summary *summary);
-Summary summarize(const Chunk &chunk);
-Summary summarize(const Summary &left, const Summary &right);
-Summary summarize(const Chunk &right, i64 index);
+struct Summarizer {
+  DynamicArray<u8> *data;
+
+  // void accumulate(Summary *summary, u8 c);
+  // void accumulate_eof(Summary *summary);
+  Summary summarize(const Summary &left, const Summary &right);
+  Summary summarize(const Chunk &chunk);
+  Summary summarize(const Chunk &right, i64 index);
+};
 
 ////////////////////////////////////////////
 
@@ -71,11 +75,12 @@ struct Rope {
       .type    = Node::Type::LEAF,
       .depth   = 0,
       .summary = {},
-      .data    = {nullptr, 0},
+      .data    = {0, 0},
   };
   NodeRef root;
   Pool<Node> *node_pool;
   DynamicArray<Node> *builder;
+  Summarizer summarizer;
 
   Node *get_or_empty(NodeRef ref)
   {
@@ -94,12 +99,22 @@ struct Rope {
   }
 };
 
+Rope create_rope(Summarizer summarizer)
+{
+  Rope rope;
+  rope.root       = NodeRef::invalid();
+  rope.node_pool  = new Pool<Node>();
+  rope.builder    = new DynamicArray<Node>(&system_allocator);
+  rope.summarizer = summarizer;
+  return rope;
+}
+
 void fill_stats(Rope rope, Node *node)
 {
   Node *left  = rope.get_during_build(node->children.left);
   Node *right = rope.get_during_build(node->children.right);
 
-  node->summary = summarize(left->summary, right->summary);
+  node->summary = rope.summarizer.summarize(left->summary, right->summary);
   node->depth   = std::max(left->depth, right->depth) + 1;
 }
 
@@ -165,7 +180,7 @@ NodeRef new_leaf(Rope rope, Chunk chunk)
   Node leaf;
   leaf.type    = Node::Type::LEAF;
   leaf.data    = chunk;
-  leaf.summary = summarize(chunk);
+  leaf.summary = rope.summarizer.summarize(chunk);
 
   i64 idx = rope.builder->push_back(leaf);
   return NodeRef(idx).for_builder();
@@ -306,34 +321,35 @@ Rope insert_right(Rope rope, NodeRef node)
   return new_rope;
 }
 
-Rope rope_of(String text)
-{
-  Rope rope;
-  rope.node_pool = new Pool<Node>(32);
-  rope.builder   = new DynamicArray<Node>(&system_allocator);
-  rope.root      = NodeRef::invalid();
+// Rope rope_of(String text)
+// {
+//   Rope rope;
+//   rope.node_pool = new Pool<Node>(32);
+//   rope.builder   = new DynamicArray<Node>(&system_allocator);
+//   rope.root      = NodeRef::invalid();
+//   rope.summarizer =
 
-  i64 next_position = 0;
-  while (next_position < text.size) {
-    Chunk chunk;
-    chunk.data   = text.data + next_position;
-    chunk.size   = std::min(text.size - next_position, CHUNK_MAX_SIZE);
-    NodeRef leaf = new_leaf(rope, chunk);
+//   i64 next_position = 0;
+//   while (next_position < text.size) {
+//     Chunk chunk;
+//     chunk.index  = next_position;
+//     chunk.size   = std::min(text.size - next_position, CHUNK_MAX_SIZE);
+//     NodeRef leaf = new_leaf(rope, chunk);
 
-    if (!rope.root.is_valid()) {
-      rope.root = leaf;
-      rope      = commit_builder(rope);
-    } else {
-      Rope new_rope = insert_right(rope, leaf);
-      release(rope);
-      rope = new_rope;
-    }
+//     if (!rope.root.is_valid()) {
+//       rope.root = leaf;
+//       rope      = commit_builder(rope);
+//     } else {
+//       Rope new_rope = insert_right(rope, leaf);
+//       release(rope);
+//       rope = new_rope;
+//     }
 
-    next_position += chunk.size;
-  }
+//     next_position += chunk.size;
+//   }
 
-  return rope;
-};
+//   return rope;
+// };
 
 // TODO this creates empty nodes if the index is at the beginning or end of a chunk
 NodeRef split(Rope rope, NodeRef root, i64 index, NodeRef *right_ret)
@@ -347,10 +363,10 @@ NodeRef split(Rope rope, NodeRef root, i64 index, NodeRef *right_ret)
     Chunk chunk = root_val->data;
     Chunk left_chunk;
     Chunk right_chunk;
-    left_chunk.data  = chunk.data;
-    left_chunk.size  = index;
-    right_chunk.data = chunk.data + index;
-    right_chunk.size = chunk.size - index;
+    left_chunk.index  = chunk.index;
+    left_chunk.size   = index;
+    right_chunk.index = chunk.index + index;
+    right_chunk.size  = chunk.size - index;
 
     if (left_chunk.size > 0) {
       new_left = new_leaf(rope, left_chunk);
@@ -485,7 +501,7 @@ void restat_for_index(Rope rope, NodeRef root, i64 index)
   Node *root_val = rope.get(root);
 
   if (root_val->type == Node::Type::LEAF) {
-    root_val->summary = summarize(root_val->data);
+    root_val->summary = rope.summarizer.summarize(root_val->data);
     return;
   }
 
