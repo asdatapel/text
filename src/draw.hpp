@@ -463,7 +463,7 @@ void start_frame(List *dl, Vec2f canvas_size)
   dl->scissor_idxs.clear();
   dl->scissors.clear();
 
-  push_scissor(dl, {0, 0, 100000, 100000});
+  push_scissor(dl, {0, 0, canvas_size.x, canvas_size.y});
 
   dl->canvas_size = canvas_size;
 
