@@ -33,5 +33,4 @@ struct BufferManager {
     return &buffers[buffers.push_back(new_buffer)];
   }
 };
-
 BufferManager buffer_manager;

@@ -3,10 +3,8 @@
 #include "buffer_manager.hpp"
 #include "draw.hpp"
 #include "editor.hpp"
+#include "panes/pane_manager.hpp"
 #include "window.hpp"
-
-namespace Five
-{
 
 struct Menu {
   Editor editor;
@@ -18,6 +16,7 @@ struct Menu {
   i32 selected = 0;
   bool entered = false;
 };
+Menu menu;
 
 void close_menu(Menu *menu)
 {
@@ -28,26 +27,24 @@ void close_menu(Menu *menu)
   clear_and_reset(&menu->editor);
 }
 
-void handle_action(Menu *menu, Action action)
+void process(Menu *menu, Actions *actions)
 {
-  if (action == Command::ESCAPE) {
-    close_menu(menu);
-    return;
+  if (menu->open) {
+    for (i32 i = 0; i < actions->size; i++) {
+      Action *action = &actions->operator[](i);
+      if (eat(action, Command::ESCAPE)) {
+        close_menu(menu);
+      } else if (eat(action, Command::INPUT_NEWLINE)) {
+        menu->entered = true;
+      } else if (eat(action, Command::NAV_LINE_UP)) {
+        menu->selected = std::max(menu->selected - 1, 0);
+      } else if (eat(action, Command::NAV_LINE_DOWN)) {
+        menu->selected += 1;
+      } else {
+        handle_action(&menu->editor, action);
+      }
+    }
   }
-  if (action == Command::INPUT_NEWLINE) {
-    menu->entered = true;
-    return;
-  }
-  if (action == Command::NAV_LINE_UP) {
-    menu->selected = std::max(menu->selected - 1, 0);
-    return;
-  }
-  if (action == Command::NAV_LINE_DOWN) {
-    menu->selected += 1;
-    return;
-  }
-
-  handle_action(&menu->editor, action);
 }
 
 i32 score_match(bool first_letter, bool starting_word, bool is_adjacent,
@@ -170,8 +167,12 @@ void merge_sort(DynamicArray<std::pair<i64, i64>> src,
   }
 }
 
-void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
+void draw_filemenu(Menu *menu, Draw::List *dl)
 {
+  if (!menu->open) {
+    return;
+  }
+
   static bool init = false;
   if (!init) {
     init = true;
@@ -229,7 +230,7 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
     }
 
     Vec2f pos = {margin, rect.y + margin + i * line_height};
-    pos = draw_string(dl, dl->font, {187, 194, 207}, text, pos);
+    pos       = draw_string(dl, dl->font, {187, 194, 207}, text, pos);
     {
       pos.x += 5;
       i32 score = fuzzy_score({menu->buffer.data, menu->buffer.size}, text);
@@ -237,7 +238,7 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
       i32 str_len = snprintf((char *)score_characters, 32, "%i", score);
 
       String score_str = {score_characters, str_len};
-      pos = draw_string(dl, dl->font, {187, 194, 207}, score_str, pos);
+      pos              = draw_string(dl, dl->font, {187, 194, 207}, score_str, pos);
     }
   }
 
@@ -245,14 +246,13 @@ void draw_filemenu(Menu *menu, Draw::List *dl, Window *active_window)
     menu->entered = false;
 
     if (files.size > 0 && sorted.size > 0) {
-      String filename              = files[(i64)sorted[(i64)menu->selected].first];
-      RopeBuffer *buffer          = buffer_manager.get_or_open_buffer(filename);
+      String filename    = files[(i64)sorted[(i64)menu->selected].first];
+      RopeBuffer *buffer = buffer_manager.get_or_open_buffer(filename);
 
-      open_editor(active_window, buffer);
+      Pane *active_pane = pm.get_focused_pane();
+      create_or_open_editor_tab(active_pane, buffer);
     }
 
     close_menu(menu);
   }
 }
-
-}  // namespace Five

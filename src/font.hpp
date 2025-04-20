@@ -67,7 +67,7 @@ struct Font {
 
 void rasterize_glyph(Font *font, FT_Face face, u32 character, Glyph *glyph)
 {
-  u32 usable_width = font->bitmap.width - 2;
+  u32 usable_width  = font->bitmap.width - 2;
   u32 usable_height = font->bitmap.height - 2;
 
   Rect4<i32> target = {
@@ -119,14 +119,10 @@ Array<Glyph, 3> extract_glyph(Font *font, FT_Face face, u32 character)
   FT_Outline outline = face->glyph->outline;
 
   Glyph glyph;
-  glyph.size = Vec2f(
-      (f32)face->glyph->metrics.width  / 64.f,
-      (f32)face->glyph->metrics.height / 64.f
-  );
-  glyph.bearing = Vec2f(
-      (f32)face->glyph->metrics.horiBearingX / 64.f,
-      (f32)face->glyph->metrics.horiBearingY / 64.f
-  );
+  glyph.size      = Vec2f((f32)face->glyph->metrics.width / 64.f,
+                          (f32)face->glyph->metrics.height / 64.f);
+  glyph.bearing   = Vec2f((f32)face->glyph->metrics.horiBearingX / 64.f,
+                          (f32)face->glyph->metrics.horiBearingY / 64.f);
   glyph.advance.x = (f32)face->glyph->advance.x / 64.f;
   glyph.advance.y = (f32)face->glyph->advance.y / 64.f;
 
@@ -201,4 +197,19 @@ Font load_font(String filename, f32 size)
     font.glyphs_two.push_back(glyphs[2]);
   }
   return font;
+}
+
+f32 text_width(Font& font, String text)
+{
+  f32 width = 0;
+  for (i32 i = 0; i < text.size; i++) {
+    u32 character = text[i];
+    if (character >= font.glyphs_zero.size) {
+      character = 0;
+    }
+
+    auto glyph = font.glyphs_zero[character];
+    width += glyph.advance.x;
+  }
+  return width;
 }

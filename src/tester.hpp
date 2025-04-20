@@ -56,7 +56,7 @@ Tester create_tester(String filename)
   return tester;
 }
 
-void add_actions(Tester *tester, Five::RopeEditor *editor, Actions *actions)
+void add_actions(Tester *tester, RopeEditor *editor, Actions *actions)
 {
   const i32 actions_per_frame = 200;
   if (tester->spans.size() == 0) return;

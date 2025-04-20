@@ -12,9 +12,6 @@
 #include "rope_buffer.hpp"
 #include "settings.hpp"
 
-namespace Five
-{
-
 struct RopeEditor {
   RopeBuffer buffer;
 
@@ -25,118 +22,127 @@ struct RopeEditor {
   f64 scroll = 0.f;
 };
 
-void handle_action(RopeEditor *editor, Action action)
+void process(RopeEditor *editor, Actions *actions)
 {
-  if (action == Command::BUFFER_PLACE_ANCHOR) {
-    editor->anchor = editor->cursor;
-  }
-  // if (action == Command::BUFFER_COPY) {
-  //   i64 start = std::min(editor->cursor.index - 1, editor->anchor.index);
-  //   i64 end   = std::max(editor->cursor.index - 1, editor->anchor.index);
+  for (i32 i = 0; i < actions->size; i++) {
+    Action *action = &actions->operator[](i);
 
-  //   String copy_str;
-  //   copy_str.data = editor->buffer->data + start;
-  //   copy_str.size = end - start + 1;
-  //   Platform::set_clipboard(copy_str);
-  // }
-  // if (action == Command::BUFFER_PASTE) {
-  //   String paste_str = Platform::get_clipboard();
-  //   for (i32 i = 0; i < paste_str.size; i++) {
-  //     editor->cursor = buffer_insert(editor->buffer, editor->cursor,
-  //     paste_str.data[i]);
-  //   }
-  // }
-
-  if (action == Command::NAV_LINE_DOWN) {
-    editor->cursor =
-        cursor_at_point(editor->buffer, editor->cursor.line() + 1, editor->want_column);
-  }
-  if (action == Command::NAV_LINE_UP) {
-    editor->cursor =
-        cursor_at_point(editor->buffer, editor->cursor.line() - 1, editor->want_column);
-  }
-  if (action == Command::NAV_CHAR_LEFT) {
-    editor->cursor      = cursor_at(editor->buffer, editor->cursor.index - 1);
-    editor->want_column = editor->cursor.column();
-  }
-  if (action == Command::NAV_CHAR_RIGHT) {
-    editor->cursor      = cursor_at(editor->buffer, editor->cursor.index + 1);
-    editor->want_column = editor->cursor.column();
-  }
-  // if (action == Command::NAV_WORD_LEFT) {
-  //   bool seen_word = false;
-  //   while (editor->cursor.index > 0) {
-  //     if (!std::isspace(char_at(editor->cursor))) {
-  //       seen_word = true;
-  //     } else if (seen_word) {
-  //       break;
-  //     }
-  //     editor->cursor = cursor_at(editor->buffer, editor->cursor.index - 1);
-  //   }
-  //   editor->want_column = editor->cursor.column();
-  // }
-  // if (action == Command::NAV_WORD_RIGHT) {
-  //   bool seen_word = false;
-  //   while (editor->cursor.index < editor->buffer.rope->summary.size) {
-  //     if (!std::isspace(char_at(editor->cursor))) {
-  //       seen_word = true;
-  //     } else if (seen_word) {
-  //       break;
-  //     }
-  //     editor->cursor = cursor_at(editor->buffer, editor->cursor.index + 1);
-  //   }
-  //   editor->want_column = editor->cursor.column();
-  // }
-  // if (action == Command::NAV_BLOCK_UP) {
-  //   i64 line_length         = 0;
-  //   RopeBuffer::Iterator it = move_backward_until(editor->cursor, '\n', &line_length);
-  //   it                      = move_backward(it);  // eat '\n'
-
-  //   RopeBuffer::Iterator current = it;
-  //   RopeBuffer::Iterator next    = move_backward_until(current, '\n', &line_length);
-  //   while (line_length > 0 && next != current) {
-  //     next    = move_backward(next);  // eat '\n'
-  //     current = next;
-  //     next    = move_backward_until(current, '\n', &line_length);
-  //   }
-  //   editor->cursor = to_cursor(next);
-  // }
-  // if (action == Command::NAV_BLOCK_DOWN) {
-  //   i64 line_length       = 0;
-  //   RopeBuffer::Cursor it = move_forward_until(editor->cursor, '\n', &line_length);
-  //   it                    = move_forward(it);  // eat '\n'
-
-  //   RopeBuffer::Cursor current = it;
-  //   RopeBuffer::Cursor next    = move_forward_until(current, '\n', &line_length);
-  //   while (line_length > 0 && next != current) {
-  //     next    = move_forward(next);  // eat '\n'
-  //     current = next;
-  //     next    = move_forward_until(current, '\n', &line_length);
-  //   }
-  //   editor->cursor = next;
-  // }
-
-  if (action == Command::INPUT_NEWLINE) {
-    buffer_insert(editor->buffer, editor->cursor, '\n');
-    editor->cursor = cursor_at(editor->buffer, editor->cursor.index + 1);
-  }
-  if (action == Command::INPUT_TAB) {
-    for (i32 i = 0; i < 2; i++) {
-      editor->cursor = buffer_insert(editor->buffer, editor->cursor, ' ');
+    if (eat(action, Command::BUFFER_CHANGE_MODE)) {
+      if (mode == Mode::INSERT) {
+        mode = Mode::NORMAL;
+      } else if (mode == Mode::NORMAL) {
+        mode = Mode::INSERT;
+      }
     }
-  }
-  if (action == Command::INPUT_BACKSPACE) {
-    String text_contents;
-    text_contents.data = editor->buffer.text->data;
-    text_contents.size = editor->buffer.text->size;
-    error("ASDASD");
-    error(text_contents);
+    if (eat(action, Command::BUFFER_PLACE_ANCHOR)) {
+      editor->anchor = editor->cursor;
+    }
+    // if (eat(action, Command::BUFFER_COPY)) {
+    //   i64 start = std::min(editor->cursor.index - 1, editor->anchor.index);
+    //   i64 end   = std::max(editor->cursor.index - 1, editor->anchor.index);
 
-    editor->cursor = buffer_remove(editor->buffer, editor->cursor);
-  }
-  if (action == Command::INPUT_TEXT) {
-    editor->cursor      = buffer_insert(editor->buffer, editor->cursor, action.character);
-    editor->want_column = editor->cursor.column();
+    //   String copy_str;
+    //   copy_str.data = editor->buffer->data + start;
+    //   copy_str.size = end - start + 1;
+    //   Platform::set_clipboard(copy_str);
+    // }
+    // if (eat(action, Command::BUFFER_PASTE)) {
+    //   String paste_str = Platform::get_clipboard();
+    //   for (i32 i = 0; i < paste_str.size; i++) {
+    //     editor->cursor = buffer_insert(editor->buffer, editor->cursor,
+    //     paste_str.data[i]);
+    //   }
+    // }
+
+    if (eat(action, Command::NAV_LINE_DOWN)) {
+      editor->cursor =
+          cursor_at_point(editor->buffer, editor->cursor.line() + 1, editor->want_column);
+    }
+    if (eat(action, Command::NAV_LINE_UP)) {
+      editor->cursor =
+          cursor_at_point(editor->buffer, editor->cursor.line() - 1, editor->want_column);
+    }
+    if (eat(action, Command::NAV_CHAR_LEFT)) {
+      editor->cursor      = cursor_at(editor->buffer, editor->cursor.index - 1);
+      editor->want_column = editor->cursor.column();
+    }
+    if (eat(action, Command::NAV_CHAR_RIGHT)) {
+      editor->cursor      = cursor_at(editor->buffer, editor->cursor.index + 1);
+      editor->want_column = editor->cursor.column();
+    }
+    // if (eat(action, Command::NAV_WORD_LEFT)) {
+    //   bool seen_word = false;
+    //   while (editor->cursor.index > 0) {
+    //     if (!std::isspace(char_at(editor->cursor))) {
+    //       seen_word = true;
+    //     } else if (seen_word) {
+    //       break;
+    //     }
+    //     editor->cursor = cursor_at(editor->buffer, editor->cursor.index - 1);
+    //   }
+    //   editor->want_column = editor->cursor.column();
+    // }
+    // if (eat(action, Command::NAV_WORD_RIGHT)) {
+    //   bool seen_word = false;
+    //   while (editor->cursor.index < editor->buffer.rope->summary.size) {
+    //     if (!std::isspace(char_at(editor->cursor))) {
+    //       seen_word = true;
+    //     } else if (seen_word) {
+    //       break;
+    //     }
+    //     editor->cursor = cursor_at(editor->buffer, editor->cursor.index + 1);
+    //   }
+    //   editor->want_column = editor->cursor.column();
+    // }
+    // if (eat(action, Command::NAV_BLOCK_UP)) {
+    //   i64 line_length         = 0;
+    //   RopeBuffer::Iterator it = move_backward_until(editor->cursor, '\n',
+    //   &line_length); it                      = move_backward(it);  // eat '\n'
+
+    //   RopeBuffer::Iterator current = it;
+    //   RopeBuffer::Iterator next    = move_backward_until(current, '\n', &line_length);
+    //   while (line_length > 0 && next != current) {
+    //     next    = move_backward(next);  // eat '\n'
+    //     current = next;
+    //     next    = move_backward_until(current, '\n', &line_length);
+    //   }
+    //   editor->cursor = to_cursor(next);
+    // }
+    // if (eat(action, Command::NAV_BLOCK_DOWN)) {
+    //   i64 line_length       = 0;
+    //   RopeBuffer::Cursor it = move_forward_until(editor->cursor, '\n', &line_length);
+    //   it                    = move_forward(it);  // eat '\n'
+
+    //   RopeBuffer::Cursor current = it;
+    //   RopeBuffer::Cursor next    = move_forward_until(current, '\n', &line_length);
+    //   while (line_length > 0 && next != current) {
+    //     next    = move_forward(next);  // eat '\n'
+    //     current = next;
+    //     next    = move_forward_until(current, '\n', &line_length);
+    //   }
+    //   editor->cursor = next;
+    // }
+
+    if (eat(action, Command::INPUT_NEWLINE)) {
+      buffer_insert(editor->buffer, editor->cursor, '\n');
+      editor->cursor = cursor_at(editor->buffer, editor->cursor.index + 1);
+    }
+    if (eat(action, Command::INPUT_TAB)) {
+      for (i32 i = 0; i < 2; i++) {
+        editor->cursor = buffer_insert(editor->buffer, editor->cursor, ' ');
+      }
+    }
+    if (eat(action, Command::INPUT_BACKSPACE)) {
+      String text_contents;
+      text_contents.data = editor->buffer.text->data;
+      text_contents.size = editor->buffer.text->size;
+
+      editor->cursor = buffer_remove(editor->buffer, editor->cursor);
+    }
+    if (eat(action, Command::INPUT_TEXT)) {
+      editor->cursor = buffer_insert(editor->buffer, editor->cursor, action->character);
+      editor->want_column = editor->cursor.column();
+    }
   }
 }
 
@@ -197,4 +203,3 @@ void clear_and_reset(RopeEditor *editor)
   // editor->cursor       = FILE_START;
   // editor->anchor       = FILE_START;
 }
-}  // namespace Five

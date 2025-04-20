@@ -526,7 +526,6 @@ Vec2f draw_char(Draw::List *dl, Font &font, Color color, u32 character, Vec2f po
       font.glyphs_zero[character].uv.x + font.glyphs_zero[character].uv.width,
       font.glyphs_zero[character].uv.y + font.glyphs_zero[character].uv.height};
   push_bitmap_glyph(dl, 0, shape_rect, uv_bounds, color, 0);
-
   pos.x += glyph.advance.x;
   return pos;
 }
@@ -535,7 +534,7 @@ Vec2f draw_char(Draw::List *dl, Font &font, Color color, u32 character, Vec2f po
 Vec2f draw_string(Draw::List *dl, Font &font, Color color, String string, Vec2f pos)
 {
   for (i32 i = 0; i < string.size; i++) {
-    pos = draw_char(dl, dl->font, color, string[i], pos);
+    pos = draw_char(dl, font, color, string[i], pos);
   }
   return pos;
 }

@@ -3,8 +3,6 @@
 #include "editor.hpp"
 #include "types.hpp"
 
-namespace Five
-{
 struct FindPrompt {
   Editor find_input;
 
@@ -13,20 +11,20 @@ struct FindPrompt {
   bool focused = false;
 };
 
-bool handle_action(FindPrompt *prompt, Action action)
+bool handle_action(FindPrompt *prompt, Action *action)
 {
-  if (action == Command::TOGGLE_FIND) {
+  if (eat(action, Command::TOGGLE_FIND)) {
     prompt->focused = false;
     return true;
   }
-  if (action == Command::ESCAPE) {
+  if (eat(action, Command::ESCAPE)) {
     prompt->open    = false;
     prompt->focused = false;
     return true;
   }
 
-  if (action == Command::MOUSE_LEFT_CLICK) {
-    if (!in_rect(action.mouse_position, prompt->rect)) {
+  if (eat(action, Command::MOUSE_LEFT_CLICK)) {
+    if (!in_rect(action->mouse_position, prompt->rect)) {
       return false;
     }
 
@@ -64,5 +62,3 @@ void draw_find_prompt(FindPrompt &prompt, Draw::List *dl, bool focused)
   draw_editor(prompt.find_input, dl, prompt.rect, full_view_range,
               focused && prompt.focused);
 }
-
-}  // namespace Five

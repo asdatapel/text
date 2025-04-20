@@ -2,15 +2,13 @@
 
 #include "containers/array.hpp"
 #include "containers/dynamic_array.hpp"
+#include "global_state.hpp"
 #include "input.hpp"
 #include "logging.hpp"
 
-enum struct Mode {
-  NORMAL,
-  INSERT,
-};
-
 enum struct Command {
+  NONE,
+
   MOUSE_LEFT_CLICK,
   MOUSE_RIGHT_CLICK,
   MOUSE_SCROLL,
@@ -50,12 +48,57 @@ enum struct Command {
 
   ESCAPE,
 };
+String command_strings[] = {
+  "NONE",
+
+  "MOUSE_LEFT_CLICK",
+  "MOUSE_RIGHT_CLICK",
+  "MOUSE_SCROLL",
+
+  "INPUT_TEXT",
+  "INPUT_NEWLINE",
+  "INPUT_TAB",
+  "INPUT_BACKSPACE",
+  "INPUT_DELETE",
+
+  "BUFFER_CHANGE_MODE",
+  "BUFFER_SAVE",
+  "BUFFER_COPY",
+  "BUFFER_PASTE",
+  "BUFFER_PLACE_ANCHOR",
+
+  "NAV_CHAR_LEFT",
+  "NAV_CHAR_RIGHT",
+  "NAV_LINE_UP",
+  "NAV_LINE_DOWN",
+  "NAV_PARAGRAPH_UP",
+  "NAV_PARAGRAPH_DOWN",
+  "NAV_WORD_LEFT",
+  "NAV_WORD_RIGHT",
+  "NAV_JUMP_TO_ANCHOR",
+  "NAV_BLOCK_UP",
+  "NAV_BLOCK_DOWN",
+
+  "WINDOW_SCROLL_UP",
+  "WINDOW_SCROLL_DOWN",
+  "WINDOW_SWITCH_LEFT",
+  "WINDOW_SWITCH_RIGHT",
+
+  "MENU_QUICK_OPEN",
+  "TOGGLE_FIND",
+  "JUMP_TO_NEXT",
+
+  "ESCAPE",
+};
+
 struct Action {
   Command command;
 
   u32 character;
   Vec2f mouse_position;
   f64 scrollwheel_delta;
+
+  bool eaten = false;
 
   Action() {}
   Action(Command command) { this->command = command; }
@@ -67,7 +110,7 @@ struct Action {
 
   bool operator==(Command command) { return this->command == command; }
 };
-typedef Array<Action, 10240> Actions;
+typedef Array<Action, 64> Actions;
 
 typedef Array<KeyInput, 8> Chord;
 Array<std::pair<Chord, Command>, 1024> bindings = {
@@ -106,6 +149,7 @@ Array<std::pair<Chord, Command>, 1024> bindings = {
 
     {Chord{{Key::G}}, Command::ESCAPE},
     {Chord{{Key::G, Modifiers::with_ctrl()}}, Command::ESCAPE},
+    {Chord{{Key::ESCAPE}}, Command::ESCAPE},
 };
 
 bool match_chord(Chord *chord, Chord *binding, bool *any_partial_matches)
@@ -125,7 +169,10 @@ bool match_chord(Chord *chord, Chord *binding, bool *any_partial_matches)
   return chord->size == binding->size && matching;
 }
 
-void process_input(Input *input, Actions *actions, Chord *chord, Mode mode)
+
+void show_partial_chord(Chord *chord);
+void show_completed_chord(Chord *chord, Command command);
+void process_input(Input *input, Actions *actions, Chord *chord)
 {
   actions->clear();
 
@@ -163,12 +210,16 @@ void process_input(Input *input, Actions *actions, Chord *chord, Mode mode)
     }
 
     chord->push_back(key);
+    show_partial_chord(chord);
 
     bool any_partial_matches = false;
     if (chord->size > 0) {
       for (i32 i = 0; i < bindings.size; i++) {
         if (match_chord(chord, &bindings[i].first, &any_partial_matches)) {
-          actions->push_back(bindings[i].second);
+          Command command = bindings[i].second;
+          actions->push_back(command);
+
+          show_completed_chord(chord, command);
           chord->clear();
         }
       }
@@ -178,4 +229,19 @@ void process_input(Input *input, Actions *actions, Chord *chord, Mode mode)
       }
     }
   }
+}
+
+bool eat(Action *action, Command command)
+{
+  if (action->eaten || action->command != command) {
+    return false;
+  }
+
+  action->eaten = true;
+  return true;
+}
+
+bool dont_eat(Action *action, Command command)
+{
+  return (!action->eaten && action->command == command);
 }

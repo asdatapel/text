@@ -12,9 +12,6 @@
 #include "platform.hpp"
 #include "settings.hpp"
 
-namespace Five
-{
-
 struct Editor {
   BasicBuffer *buffer;
 
@@ -25,12 +22,19 @@ struct Editor {
   f32 scroll = 0.f;
 };
 
-void handle_action(Editor *editor, Action action)
+void handle_action(Editor *editor, Action *action)
 {
-  if (action == Command::BUFFER_PLACE_ANCHOR) {
+  if (eat(action, Command::BUFFER_CHANGE_MODE)) {
+    if (mode == Mode::INSERT) {
+      mode = Mode::NORMAL;
+    } else if (mode == Mode::NORMAL) {
+      mode = Mode::INSERT;
+    }
+  }
+  if (eat(action, Command::BUFFER_PLACE_ANCHOR)) {
     editor->anchor = editor->cursor;
   }
-  if (action == Command::BUFFER_COPY) {
+  if (eat(action, Command::BUFFER_COPY)) {
     i64 start = std::min(editor->cursor.index - 1, editor->anchor.index);
     i64 end   = std::max(editor->cursor.index - 1, editor->anchor.index);
 
@@ -39,30 +43,30 @@ void handle_action(Editor *editor, Action action)
     copy_str.size = end - start + 1;
     Platform::set_clipboard(copy_str);
   }
-  if (action == Command::BUFFER_PASTE) {
+  if (eat(action, Command::BUFFER_PASTE)) {
     String paste_str = Platform::get_clipboard();
     for (i32 i = 0; i < paste_str.size; i++) {
       editor->cursor = buffer_insert(editor->buffer, editor->cursor, paste_str.data[i]);
     }
   }
 
-  if (action == Command::NAV_LINE_DOWN) {
+  if (eat(action, Command::NAV_LINE_DOWN)) {
     editor->cursor =
         find_position(editor->buffer, editor->cursor.line + 1, editor->want_column);
   }
-  if (action == Command::NAV_LINE_UP) {
+  if (eat(action, Command::NAV_LINE_UP)) {
     editor->cursor =
         find_position(editor->buffer, editor->cursor.line - 1, editor->want_column);
   }
-  if (action == Command::NAV_CHAR_LEFT) {
+  if (eat(action, Command::NAV_CHAR_LEFT)) {
     editor->cursor      = shift_point_backward(editor->buffer, editor->cursor);
     editor->want_column = editor->cursor.column;
   }
-  if (action == Command::NAV_CHAR_RIGHT) {
+  if (eat(action, Command::NAV_CHAR_RIGHT)) {
     editor->cursor      = shift_point_forward(editor->buffer, editor->cursor);
     editor->want_column = editor->cursor.column;
   }
-  if (action == Command::NAV_WORD_LEFT) {
+  if (eat(action, Command::NAV_WORD_LEFT)) {
     bool seen_word = false;
     while (editor->cursor.index > 0) {
       if (!std::isspace(editor->buffer->data[editor->cursor.index - 1])) {
@@ -74,7 +78,7 @@ void handle_action(Editor *editor, Action action)
     }
     editor->want_column = editor->cursor.column;
   }
-  if (action == Command::NAV_WORD_RIGHT) {
+  if (eat(action, Command::NAV_WORD_RIGHT)) {
     bool seen_word = false;
     while (editor->cursor.index < editor->buffer->size) {
       if (!std::isspace(editor->buffer->data[editor->cursor.index])) {
@@ -86,14 +90,14 @@ void handle_action(Editor *editor, Action action)
     }
     editor->want_column = editor->cursor.column;
   }
-  if (action == Command::NAV_BLOCK_UP) {
+  if (eat(action, Command::NAV_BLOCK_UP)) {
     i64 line = editor->cursor.line - 1;
     while (line >= 0 && !is_only_whitespace(get_line_contents(editor->buffer, line))) {
       line--;
     }
     editor->cursor = find_position(editor->buffer, line, editor->want_column);
   }
-  if (action == Command::NAV_BLOCK_DOWN) {
+  if (eat(action, Command::NAV_BLOCK_DOWN)) {
     i64 line = editor->cursor.line + 1;
     while (line < count_lines(editor->buffer) &&
            !is_only_whitespace(get_line_contents(editor->buffer, line))) {
@@ -102,20 +106,20 @@ void handle_action(Editor *editor, Action action)
     editor->cursor = find_position(editor->buffer, line, editor->want_column);
   }
 
-  if (action == Command::INPUT_NEWLINE) {
+  if (eat(action, Command::INPUT_NEWLINE)) {
     buffer_insert(editor->buffer, editor->cursor, '\n');
     editor->cursor = shift_point_forward(editor->buffer, editor->cursor);
   }
-  if (action == Command::INPUT_TAB) {
+  if (eat(action, Command::INPUT_TAB)) {
     for (i32 i = 0; i < 2; i++) {
       editor->cursor = buffer_insert(editor->buffer, editor->cursor, ' ');
     }
   }
-  if (action == Command::INPUT_BACKSPACE) {
+  if (eat(action, Command::INPUT_BACKSPACE)) {
     editor->cursor = buffer_remove(editor->buffer, editor->cursor);
   }
-  if (action == Command::INPUT_TEXT) {
-    editor->cursor      = buffer_insert(editor->buffer, editor->cursor, action.character);
+  if (eat(action, Command::INPUT_TEXT)) {
+    editor->cursor      = buffer_insert(editor->buffer, editor->cursor, action->character);
     editor->want_column = editor->cursor.column;
   }
 }
@@ -185,4 +189,3 @@ void clear_and_reset(Editor *editor)
   editor->cursor       = FILE_START;
   editor->anchor       = FILE_START;
 }
-}  // namespace Five

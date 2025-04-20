@@ -1,7 +1,10 @@
 #pragma once
 
 #include "actions.hpp"
+#include "containers/array.hpp"
 #include "draw.hpp"
+#include "editor.hpp"
+#include "find_window.hpp"
 #include "rope_buffer.hpp"
 
 struct DebugWindow {
@@ -9,21 +12,29 @@ struct DebugWindow {
 
   Vec2f mouse_position;
   f64 scroll;
+
+  BasicBuffer find_buffer;
+  Editor find_input;
 };
 
 DebugWindow init_debug_window(RopeBuffer *buffer)
 {
   DebugWindow debug_window;
   debug_window.buffer = buffer;
+
+  debug_window.find_buffer       = create_buffer();
+  debug_window.find_input.buffer = &debug_window.find_buffer;
   return debug_window;
 }
 
-void handle_action(DebugWindow *window, Action action)
+void handle_action(DebugWindow *window, Action *action)
 {
-  if (action == Command::MOUSE_SCROLL) {
-    window->mouse_position = action.mouse_position;
+  if (eat(action, Command::MOUSE_SCROLL)) {
+    window->mouse_position = action->mouse_position;
     return;
   }
+
+  handle_action(&window->find_input, action);
 }
 
 // returns max depth
@@ -63,7 +74,8 @@ i64 draw(DebugWindow *window, Draw::List *dl, Node *node, i32 x, i32 y, Summary 
         {0, 0, 0, 255});
     i64 depthr = draw(window, dl, rope.get(node->children.right),
                       x + (width + gap) * (depthl), y + (width + gap),
-                      window->buffer->summarizer.summarize(summary, rope.get(node->children.left)->summary));
+                      window->buffer->summarizer.summarize(
+                          summary, rope.get(node->children.left)->summary));
 
     if (in_rect(window->mouse_position, rect)) {
       Color white = {1.f, 1.f, 1.f, 1.f};
@@ -195,47 +207,111 @@ i64 draw(DebugWindow *window, Draw::List *dl, Node *node, i32 x, i32 y, Summary 
 
 void draw(DebugWindow *window, Draw::List *dl, Rect4f target_rect)
 {
-  Color white = {1.f, 1.f, 1.f, 1.f};
-  f32 text_x  = target_rect.x - (f32)window->scroll;
-  String free_nodes_count =
-      StaticString<32>::from_i32(window->buffer->rope.node_pool->count_free());
-  String capacity = StaticString<32>::from_i32(window->buffer->rope.node_pool->capacity);
-  Vec2f cursor    = {text_x, target_rect.y};
-  cursor          = Draw::draw_string(dl, dl->font, white, "FreeCount: ", cursor);
-  cursor          = Draw::draw_string(dl, dl->font, white, free_nodes_count, cursor);
-  cursor.x        = text_x;
-  cursor.y += dl->font.height;
-  cursor   = Draw::draw_string(dl, dl->font, white, "Capacity: ", cursor);
-  cursor   = Draw::draw_string(dl, dl->font, white, capacity, cursor);
-  cursor.x = text_x;
-  cursor.y += dl->font.height;
+  Layout::Button button;
+  Layout::Button find_button;
+  Array<Rect4f, 40> rects;
+  rects.resize(40);
+  i32 next_rect_i = 0;
+  auto next_rect  = [&]() { return &rects[next_rect_i++]; };
 
-  String builder_size = StaticString<32>::from_i32(window->buffer->rope.builder->size);
-  cursor   = Draw::draw_string(dl, dl->font, white, "Builder Size: ", cursor);
-  cursor   = Draw::draw_string(dl, dl->font, white, builder_size, cursor);
-  cursor.x = text_x;
-  cursor.y += dl->font.height;
+  String find_buffer_string;
+  find_buffer_string.data = window->find_input.buffer->data;
+  find_buffer_string.size = window->find_input.buffer->size;
 
-  String builder_capacity = StaticString<32>::from_i32(window->buffer->rope.builder->capacity);
-  cursor   = Draw::draw_string(dl, dl->font, white, "Builder Capacity: ", cursor);
-  cursor   = Draw::draw_string(dl, dl->font, white, builder_capacity, cursor);
-  cursor.x = text_x;
-  cursor.y += dl->font.height;
+  // handle the mouse position here, and interaaction later
 
-  String depth = StaticString<32>::from_i32(
-      window->buffer->rope.get_or_empty(window->buffer->rope.root)->depth);
-  cursor   = Draw::draw_string(dl, dl->font, white, "Depth: ", cursor);
-  cursor   = Draw::draw_string(dl, dl->font, white, depth, cursor);
-  cursor.x = text_x;
-  cursor.y += dl->font.height;
+  Rect4f ui_rect = target_rect;
+  Layout::start_ui(ui_rect, Layout::Direction::RIGHT);
 
-  String length = StaticString<32>::from_i32(
-      window->buffer->rope.get_or_empty(window->buffer->rope.root)->summary.size);
-  cursor   = Draw::draw_string(dl, dl->font, white, "Length: ", cursor);
-  cursor   = Draw::draw_string(dl, dl->font, white, length, cursor);
-  cursor.x = text_x;
-  cursor.y += dl->font.height;
+  Layout::TextInput search_input;
+  Layout::Button search_button;
+  Layout::Button dumb_button;
 
-  draw(window, dl, window->buffer->rope.get_or_empty(window->buffer->rope.root),
-       cursor.x, cursor.y, {});
+  Layout::start({Layout::grow(), Layout::fit()}, Layout::Direction::RIGHT, next_rect());
+  {
+    Layout::place_text_input(Layout::grow(), &window->find_input, &search_input);
+    Layout::place_button("Dummmmmmmmb", &dumb_button);
+    Layout::place_button("Search", &search_button);
+  }
+  Layout::end();
+
+  // Layout::start({48, 48}, Layout::Direction::RIGHT, next_rect());
+  // Layout::end();
+
+  // Layout::start({Layout::grow(), Layout::fit()}, Layout::Direction::DOWN, next_rect());
+  // {
+  //   Layout::start({32, 64}, Layout::Direction::RIGHT, next_rect());
+  //   Layout::end();
+  //   Layout::start({48, 25}, Layout::Direction::RIGHT, next_rect());
+  //   Layout::end();
+
+  //   Layout::start({32, 64}, Layout::Direction::RIGHT, next_rect());
+  //   Layout::end();
+
+  //   Layout::place_button(find_buffer_string, &find_button);
+
+  //   Layout::place_button("Test Me", &button);
+  //   Layout::start({Layout::grow(), Layout::grow(10)}, Layout::Direction::RIGHT,
+  //                 next_rect());
+  //   Layout::end();
+  // }
+  // Layout::end();
+
+  // Layout::start({20, 48}, Layout::Direction::RIGHT, next_rect());
+  // Layout::end();
+
+  Layout::end_ui();
+
+  // for (i32 i = 0; i < rects.size; i++) {
+  //   Draw::push_rounded_rect(dl, 0, rects[i], 7, Color::from_int(0x999999));
+  //   Draw::push_rounded_rect(dl, 0, inset(rects[i], 1.5), 7, settings.solid_color);
+  // }
+  // Layout::draw_button(dl, find_buffer_string, &find_button);
+  // Layout::draw_button(dl, "Test Me", &button);
+  Layout::draw_text_input(dl, &search_input);
+  Layout::draw_button(dl, "Search", &search_button);
+  Layout::draw_button(dl, "Dummmmmmmmb", &dumb_button);
+
+  // Color white = {1.f, 1.f, 1.f, 1.f};
+  // f32 text_x  = target_rect.x - (f32)window->scroll;
+  // String free_nodes_count =
+  //     StaticString<32>::from_i32(window->buffer->rope.node_pool->count_free());
+  // String capacity =
+  // StaticString<32>::from_i32(window->buffer->rope.node_pool->capacity); Vec2f cursor =
+  // {text_x, target_rect.y}; cursor          = Draw::draw_string(dl, dl->font, white,
+  // "FreeCount: ", cursor); cursor          = Draw::draw_string(dl, dl->font, white,
+  // free_nodes_count, cursor); cursor.x        = text_x; cursor.y += dl->font.height;
+  // cursor   = Draw::draw_string(dl, dl->font, white, "Capacity: ", cursor);
+  // cursor   = Draw::draw_string(dl, dl->font, white, capacity, cursor);
+  // cursor.x = text_x;
+  // cursor.y += dl->font.height;
+
+  // String builder_size = StaticString<32>::from_i32(window->buffer->rope.builder->size);
+  // cursor   = Draw::draw_string(dl, dl->font, white, "Builder Size: ", cursor);
+  // cursor   = Draw::draw_string(dl, dl->font, white, builder_size, cursor);
+  // cursor.x = text_x;
+  // cursor.y += dl->font.height;
+
+  // String builder_capacity =
+  // StaticString<32>::from_i32(window->buffer->rope.builder->capacity); cursor   =
+  // Draw::draw_string(dl, dl->font, white, "Builder Capacity: ", cursor); cursor   =
+  // Draw::draw_string(dl, dl->font, white, builder_capacity, cursor); cursor.x = text_x;
+  // cursor.y += dl->font.height;
+
+  // String depth = StaticString<32>::from_i32(
+  //     window->buffer->rope.get_or_empty(window->buffer->rope.root)->depth);
+  // cursor   = Draw::draw_string(dl, dl->font, white, "Depth: ", cursor);
+  // cursor   = Draw::draw_string(dl, dl->font, white, depth, cursor);
+  // cursor.x = text_x;
+  // cursor.y += dl->font.height;
+
+  // String length = StaticString<32>::from_i32(
+  //     window->buffer->rope.get_or_empty(window->buffer->rope.root)->summary.size);
+  // cursor   = Draw::draw_string(dl, dl->font, white, "Length: ", cursor);
+  // cursor   = Draw::draw_string(dl, dl->font, white, length, cursor);
+  // cursor.x = text_x;
+  // cursor.y += dl->font.height;
+
+  // draw(window, dl, window->buffer->rope.get_or_empty(window->buffer->rope.root),
+  //      cursor.x, cursor.y, {});
 }
